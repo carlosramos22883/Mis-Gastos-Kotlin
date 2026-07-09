@@ -1,0 +1,32 @@
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+.DS_Store?
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+# Archivos de compilación generados
+*.apk
+*.ap_
+*.aab
+*.dex
+*.class
+
+# Carpetas de salida antiguas
+bin/
+gen/
+out/
+
+# Archivos de sistema de Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
