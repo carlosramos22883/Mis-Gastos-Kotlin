@@ -6,6 +6,8 @@ import com.carlosramos.misgastos.data.remote.dto.LoginRequest
 import com.carlosramos.misgastos.data.remote.dto.RegisterRequest
 import com.carlosramos.misgastos.data.remote.dto.UserResponse
 import com.carlosramos.misgastos.data.remote.dto.GoogleLoginRequest
+import com.carlosramos.misgastos.data.remote.dto.ForgotPasswordRequest
+import com.carlosramos.misgastos.data.remote.dto.ResetPasswordRequest
 import retrofit2.HttpException
 import java.io.IOException
 import javax.inject.Inject
@@ -25,6 +27,13 @@ sealed class AuthResult {
     data class Error(val message: String) : AuthResult()
     object Loading : AuthResult()
     object Idle : AuthResult()
+}
+
+sealed class PasswordResetResult {
+    data class Success(val message: String) : PasswordResetResult()
+    data class Error(val message: String) : PasswordResetResult()
+    object Loading : PasswordResetResult()
+    object Idle : PasswordResetResult()
 }
 
 /**
@@ -198,6 +207,56 @@ class AuthRepository @Inject constructor(
             }
         } catch (e: Exception) {
             AuthResult.Error("Error de conexión: ${e.message}")
+        }
+    }
+
+    /**
+     * Enviar link de recuperación de contraseña.
+     */
+    suspend fun forgotPassword(email: String): PasswordResetResult {
+        return try {
+            val response = apiService.forgotPassword(ForgotPasswordRequest(email))
+
+            if (response.isSuccessful && response.body() != null) {
+                PasswordResetResult.Success(response.body()!!.message ?: "Link enviado")
+            } else {
+                val errorBody = response.errorBody()?.string()
+                val laravelError = com.google.gson.Gson().fromJson(
+                    errorBody,
+                    LaravelErrorResponse::class.java
+                )
+                val errorMessage = laravelError?.message ?: "Error al enviar el link"
+                PasswordResetResult.Error(errorMessage)
+            }
+        } catch (e: Exception) {
+            PasswordResetResult.Error("Error de conexión: ${e.message}")
+        }
+    }
+
+    /**
+     * Resetear contraseña con el token.
+     */
+    suspend fun resetPassword(email: String, token: String, password: String): PasswordResetResult {
+        return try {
+            val response = apiService.resetPassword(
+                ResetPasswordRequest(email, token, password, password)
+            )
+
+            if (response.isSuccessful && response.body() != null) {
+                PasswordResetResult.Success(response.body()!!.message ?: "Contraseña actualizada")
+            } else {
+                val errorBody = response.errorBody()?.string()
+                val laravelError = com.google.gson.Gson().fromJson(
+                    errorBody,
+                    LaravelErrorResponse::class.java
+                )
+                val errorMessage = laravelError?.message
+                    ?: response.body()?.error
+                    ?: "Error al resetear contraseña"
+                PasswordResetResult.Error(errorMessage)
+            }
+        } catch (e: Exception) {
+            PasswordResetResult.Error("Error de conexión: ${e.message}")
         }
     }
 }

@@ -5,6 +5,9 @@ import com.carlosramos.misgastos.data.remote.dto.LoginRequest
 import com.carlosramos.misgastos.data.remote.dto.RegisterRequest
 import com.carlosramos.misgastos.data.remote.dto.UserResponse
 import com.carlosramos.misgastos.data.remote.dto.GoogleLoginRequest
+import com.carlosramos.misgastos.data.remote.dto.ForgotPasswordRequest
+import com.carlosramos.misgastos.data.remote.dto.ResetPasswordRequest
+import com.carlosramos.misgastos.data.remote.dto.PasswordResetResponse
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
@@ -52,4 +55,19 @@ interface ApiService {
      */
     @POST("auth/google")
     suspend fun loginWithGoogle(@Body request: GoogleLoginRequest): Response<AuthResponse>
+
+
+    /**
+     * Enviar link de recuperación de contraseña.
+     * POST /api/forgot-password
+     */
+    @POST("forgot-password")
+    suspend fun forgotPassword(@Body request: ForgotPasswordRequest): Response<PasswordResetResponse>
+
+    /**
+     * Resetear contraseña con el token recibido por email.
+     * POST /api/reset-password
+     */
+    @POST("reset-password")
+    suspend fun resetPassword(@Body request: ResetPasswordRequest): Response<PasswordResetResponse>
 }

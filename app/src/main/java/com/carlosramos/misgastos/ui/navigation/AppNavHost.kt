@@ -11,6 +11,8 @@ import com.carlosramos.misgastos.ui.auth.AuthUiState
 import com.carlosramos.misgastos.ui.auth.AuthViewModel
 import com.carlosramos.misgastos.ui.auth.LoginScreen
 import com.carlosramos.misgastos.ui.auth.RegisterScreen
+import com.carlosramos.misgastos.ui.auth.ResetPasswordScreen
+import com.carlosramos.misgastos.ui.auth.ForgotPasswordScreen
 import com.carlosramos.misgastos.ui.dashboard.DashboardScreen
 
 @Composable
@@ -39,6 +41,9 @@ fun AppNavHost(
                 },
                 onNavigateToRegister = {
                     navController.navigate(Screen.REGISTER)
+                },
+                onNavigateToForgotPassword = {
+                    navController.navigate(Screen.FORGOT_PASSWORD)
                 },
                 uiState = uiState
             )
@@ -73,6 +78,55 @@ fun AppNavHost(
                         popUpTo(Screen.LOGIN) { inclusive = true }
                     }
                 }
+            )
+        }
+
+        composable(Screen.FORGOT_PASSWORD) {
+            val authViewModel: AuthViewModel = hiltViewModel()
+            val passwordResetState by authViewModel.passwordResetState.collectAsState()
+
+            ForgotPasswordScreen(
+                onSendLink = { email ->
+                    authViewModel.forgotPassword(email)
+                },
+                onNavigateToReset = { email ->
+                    navController.navigate(Screen.resetPasswordRoute(email))
+                },
+                onNavigateBack = {
+                    navController.popBackStack()
+                },
+                passwordResetState = passwordResetState
+            )
+        }
+
+        composable(
+            route = Screen.RESET_PASSWORD,
+            arguments = listOf(
+                androidx.navigation.navArgument("email") {
+                    type = androidx.navigation.NavType.StringType
+                }
+            )
+        ) { backStackEntry ->
+            val email = backStackEntry.arguments?.getString("email") ?: ""
+            val authViewModel: AuthViewModel = hiltViewModel()
+            val passwordResetState by authViewModel.passwordResetState.collectAsState()
+
+            ResetPasswordScreen(
+                email = email,
+                onResetPassword = { emailParam, token, password ->
+                    authViewModel.resetPassword(emailParam, token, password)
+                },
+                onNavigateToLogin = {
+                    authViewModel.clearPasswordResetState()
+                    navController.navigate(Screen.LOGIN) {
+                        popUpTo(Screen.LOGIN) { inclusive = true }
+                    }
+                },
+                onNavigateBack = {
+                    authViewModel.clearPasswordResetState()
+                    navController.popBackStack()
+                },
+                passwordResetState = passwordResetState
             )
         }
     }

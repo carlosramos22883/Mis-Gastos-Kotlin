@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import com.carlosramos.misgastos.data.repository.PasswordResetResult
 
 /**
  * Estados de la UI de autenticación.
@@ -111,4 +112,37 @@ class AuthViewModel @Inject constructor(
             handleAuthResult(result)
         }
     }
+
+    private val _passwordResetState = MutableStateFlow<PasswordResetResult>(PasswordResetResult.Idle)
+    val passwordResetState: StateFlow<PasswordResetResult> = _passwordResetState.asStateFlow()
+
+    /**
+     * Enviar link de recuperación
+     */
+    fun forgotPassword(email: String) {
+        viewModelScope.launch {
+            _passwordResetState.value = PasswordResetResult.Loading
+            val result = repository.forgotPassword(email)
+            _passwordResetState.value = result
+        }
+    }
+
+    /**
+     * Resetear contraseña
+     */
+    fun resetPassword(email: String, token: String, password: String) {
+        viewModelScope.launch {
+            _passwordResetState.value = PasswordResetResult.Loading
+            val result = repository.resetPassword(email, token, password)
+            _passwordResetState.value = result
+        }
+    }
+
+    /**
+     * Limpiar estado de reset
+     */
+    fun clearPasswordResetState() {
+        _passwordResetState.value = PasswordResetResult.Idle
+    }
+
 }

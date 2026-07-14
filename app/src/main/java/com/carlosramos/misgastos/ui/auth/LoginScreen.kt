@@ -20,6 +20,7 @@ fun LoginScreen(
     onLoginClick: (String, String) -> Unit,
     onGoogleLoginClick: (String) -> Unit,
     onNavigateToRegister: () -> Unit,
+    onNavigateToForgotPassword: () -> Unit,
     uiState: AuthUiState
 ) {
     var email by remember { mutableStateOf("") }
@@ -117,7 +118,11 @@ fun LoginScreen(
             Text("Continuar con Google")
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(8.dp))
+
+        TextButton(onClick = onNavigateToForgotPassword) {
+            Text("¿Olvidaste tu contraseña?")
+        }
 
         TextButton(onClick = onNavigateToRegister) {
             Text("¿No tienes cuenta? Regístrate")
