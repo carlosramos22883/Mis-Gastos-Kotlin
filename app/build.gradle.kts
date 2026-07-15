@@ -46,6 +46,7 @@ android {
 }
 
 dependencies {
+    implementation(libs.androidx.compose.foundation)
     // Compose BOM (Bill of Materials - controla todas las versiones de Compose)
     val composeBom = platform("androidx.compose:compose-bom:2024.09.02")
     implementation(composeBom)

@@ -1,16 +1,23 @@
 package com.carlosramos.misgastos.ui.auth
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.carlosramos.misgastos.R
 
 @Composable
 fun RegisterScreen(
@@ -26,14 +33,32 @@ fun RegisterScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
+            .padding(24.dp)
+            .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(text = "Crear Cuenta", fontSize = 28.sp, style = MaterialTheme.typography.headlineMedium)
+        Spacer(modifier = Modifier.weight(1f))
+
+        // Logo
+        Image(
+            painter = painterResource(id = R.drawable.logo_mis_gastos),
+            contentDescription = "Logo Mis Gastos",
+            modifier = Modifier
+                .size(160.dp)
+                .padding(bottom = 16.dp),
+            contentScale = ContentScale.Fit
+        )
+
+        // Título
+        Text(
+            text = "Crear Cuenta",
+            fontSize = 28.sp,
+            style = MaterialTheme.typography.headlineMedium
+        )
 
         Spacer(modifier = Modifier.height(24.dp))
 
+        // Errores
         if (uiState is AuthUiState.Error) {
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
@@ -48,6 +73,7 @@ fun RegisterScreen(
             Spacer(modifier = Modifier.height(16.dp))
         }
 
+        // Campos
         OutlinedTextField(
             value = name,
             onValueChange = { name = it },
@@ -103,14 +129,16 @@ fun RegisterScreen(
                     strokeWidth = 2.dp
                 )
             } else {
-                Text("Registrarse")
+                Text("Registrarse", modifier = Modifier.padding(vertical = 8.dp))
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.weight(1f))
 
         TextButton(onClick = onNavigateToLogin) {
             Text("¿Ya tienes cuenta? Inicia sesión")
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
     }
 }
