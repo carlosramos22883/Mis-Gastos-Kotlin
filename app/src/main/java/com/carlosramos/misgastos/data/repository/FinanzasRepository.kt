@@ -75,7 +75,8 @@ class FinanzasRepository @Inject constructor(
     suspend fun dashboard() = llamar { api.dashboard() }.datos()
     suspend fun hogar() = llamar { api.hogar() }.datos()
     suspend fun categorias() = llamar { api.categorias() }.datos()
-    suspend fun contactos() = llamar { api.contactos() }.datos()
+    suspend fun contactos(filtro: String? = null) = llamar { api.contactos(filtro) }.datos()
+    suspend fun catalogos() = llamar { api.catalogos() }.datos()
 
     suspend fun efectivo(ciclo: String?, tipo: String?, pagina: Int) = llamar { api.efectivo(ciclo, tipo, pagina) }
     suspend fun guardarEfectivo(id: Int?, body: MovimientoEfectivoBody) =
@@ -104,6 +105,32 @@ class FinanzasRepository @Inject constructor(
     suspend fun guardarMovimientoTarjeta(tarjetaId: Int, id: Int?, body: com.carlosramos.misgastos.data.remote.dto.MovimientoTarjetaBody) =
         llamar { if (id == null) api.crearMovimientoTarjeta(tarjetaId, body) else api.editarMovimientoTarjeta(tarjetaId, id, body) }.datos()
     suspend fun eliminarMovimientoTarjeta(tarjetaId: Int, id: Int) = llamarSinCuerpo { api.eliminarMovimientoTarjeta(tarjetaId, id) }
+
+    suspend fun contacto(id: Int) = llamar { api.contacto(id) }.datos()
+    suspend fun guardarContacto(id: Int?, body: com.carlosramos.misgastos.data.remote.dto.ContactoBody) =
+        llamar { if (id == null) api.crearContacto(body) else api.editarContacto(id, body) }.datos().also { if (it is Resultado.Ok) olvidar() }
+    suspend fun crearDeuda(contactoId: Int, body: com.carlosramos.misgastos.data.remote.dto.DeudaBody) = llamar { api.crearDeuda(contactoId, body) }.datos()
+    suspend fun eliminarDeuda(id: Int) = llamarSinCuerpo { api.eliminarDeuda(id) }
+    suspend fun crearPagoDeuda(contactoId: Int, body: com.carlosramos.misgastos.data.remote.dto.DeudaPagoBody) = llamar { api.crearPagoDeuda(contactoId, body) }.datos()
+    suspend fun eliminarPagoDeuda(id: Int) = llamarSinCuerpo { api.eliminarPagoDeuda(id) }
+
+    suspend fun prestamos() = llamar { api.prestamos() }.datos()
+    suspend fun prestamo(id: Int) = llamar { api.prestamo(id) }.datos()
+    suspend fun proyeccion(id: Int, extra: String?, abono: String?, modo: String?) = llamar { api.proyeccion(id, extra, abono, modo) }.datos()
+    suspend fun pagarPrestamo(id: Int, body: com.carlosramos.misgastos.data.remote.dto.PrestamoPagoBody) = llamar { api.crearPagoPrestamo(id, body) }.datos()
+    suspend fun eliminarPagoPrestamo(id: Int) = llamarSinCuerpo { api.eliminarPagoPrestamo(id) }
+
+    suspend fun ingresos() = llamar { api.ingresos() }.datos()
+    suspend fun ingreso(id: Int) = llamar { api.ingreso(id) }.datos()
+    suspend fun propuesta(id: Int, bruto: String?) = llamar { api.propuesta(id, bruto) }.datos()
+    suspend fun registrarRecibo(id: Int, body: com.carlosramos.misgastos.data.remote.dto.ReciboBody) = llamar { api.crearRecibo(id, body) }.datos()
+    suspend fun eliminarRecibo(id: Int) = llamarSinCuerpo { api.eliminarRecibo(id) }
+
+    /** Efectivo y cuentas activas con su saldo, para elegir de dónde sale o a dónde entra el dinero. */
+    suspend fun cajas() = when (val r = opcionesTransferencia()) {
+        is Resultado.Ok -> Resultado.Ok(r.datos.destinos)
+        is Resultado.Falla -> r
+    }
 
     private suspend fun <T> llamar(peticion: suspend () -> Response<T>): Resultado<T> = try {
         val respuesta = peticion()

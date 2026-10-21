@@ -98,6 +98,8 @@ fun InicioScreen(
     onVerCompromisos: () -> Unit,
     onAbrirCuenta: (Int) -> Unit,
     onAbrirTarjeta: (Int) -> Unit,
+    onVerPrestamos: () -> Unit,
+    onVerNosDeben: () -> Unit,
     viewModel: InicioViewModel = hiltViewModel()
 ) {
     val estado by viewModel.estado.collectAsStateWithLifecycle()
@@ -157,10 +159,10 @@ fun InicioScreen(
                 }
                 item {
                     Seccion("Deudas") {
-                        FilaValor("Préstamos (saldo)", Formato.dinero(d.deudaPrestamos))
-                        FilaValor("Cuotas de préstamos por mes", Formato.dinero(d.cuotasPrestamos))
+                        FilaValor("Préstamos (saldo) ›", Formato.dinero(d.deudaPrestamos), onClick = onVerPrestamos)
+                        FilaValor("Cuotas de préstamos por mes", Formato.dinero(d.cuotasPrestamos), onClick = onVerPrestamos)
                         FilaValor("Deuda en tarjetas", Formato.dinero(d.tarjetasTotales.deuda))
-                        FilaValor("Nos deben", Formato.dinero(d.nosDeben), Semantica.ingreso)
+                        FilaValor("Nos deben ›", Formato.dinero(d.nosDeben), Semantica.ingreso, onClick = onVerNosDeben)
                     }
                 }
                 if (d.gastosPorCategoria.isNotEmpty()) item { GastosPorCategoria(d) }

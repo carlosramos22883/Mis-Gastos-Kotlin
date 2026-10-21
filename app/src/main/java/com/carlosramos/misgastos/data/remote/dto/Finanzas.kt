@@ -231,10 +231,216 @@ data class Miembro(
 
 data class Contacto(
     val id: Int,
+    val nombre: String? = null,
+    val apellido: String? = null,
     @SerializedName("nombre_completo") val nombreCompleto: String,
+    @SerializedName("tipo_contacto_id") val tipoContactoId: Int? = null,
     val tipo: String?,
+    val telefono: String? = null,
+    val email: String? = null,
+    val notas: String? = null,
     @SerializedName("foto_url") val fotoUrl: String?,
-    val activo: Boolean
+    val activo: Boolean,
+    val prestado: String? = null,
+    val pagado: String? = null,
+    val pendiente: String? = null,
+    @SerializedName("deudas_abiertas") val deudasAbiertas: Int = 0,
+    val deudas: List<Deuda>? = null
+)
+
+/** origen: efectivo | cuenta:{id} | tarjeta:{id} | ninguno (solo anotar) */
+data class Deuda(
+    val id: Int,
+    @SerializedName("user_id") val userId: Int?,
+    val descripcion: String,
+    val comentario: String?,
+    val fecha: String,
+    val origen: String,
+    val monto: String,
+    val pagado: String,
+    val pendiente: String,
+    val estado: String,
+    val pagos: List<DeudaPago>
+)
+
+data class DeudaPago(
+    val id: Int,
+    @SerializedName("user_id") val userId: Int?,
+    val fecha: String,
+    val monto: String,
+    val destino: String,
+    val comentario: String?
+)
+
+data class ContactoBody(
+    val nombre: String,
+    val apellido: String?,
+    @SerializedName("tipo_contacto_id") val tipoContactoId: Int,
+    val telefono: String?,
+    val email: String?,
+    val notas: String?,
+    val activo: Boolean = true
+)
+
+data class DeudaBody(
+    val descripcion: String,
+    val monto: String,
+    val fecha: String,
+    val origen: String,
+    val comentario: String?,
+    @SerializedName("user_id") val userId: Int?
+)
+
+/** destino: efectivo | cuenta:{id} | ninguno · deuda_id: a cuál se aplica (null = de la más antigua a la más reciente) */
+data class DeudaPagoBody(
+    val monto: String,
+    val fecha: String,
+    val destino: String,
+    @SerializedName("deuda_id") val deudaId: Int?,
+    val comentario: String?,
+    @SerializedName("user_id") val userId: Int?
+)
+
+data class TipoSimple(val id: Int, val nombre: String)
+
+data class Catalogos(@SerializedName("tipos_contacto") val tiposContacto: List<TipoSimple>)
+
+// ---------- Préstamos (/api/prestamos) ----------
+
+data class CargoPrestamo(val nombre: String, val monto: String?)
+
+data class PrestamoPago(
+    val id: Int,
+    @SerializedName("user_id") val userId: Int?,
+    val fecha: String,
+    val origen: String,
+    val planilla: String?,
+    val capital: String,
+    val interes: String,
+    val cargos: String?,
+    val mora: String?,
+    val total: String,
+    val comentario: String?
+)
+
+data class SugerenciaPago(val fecha: String, val capital: String, val interes: String, val cargos: String, val mora: String, val total: String)
+
+data class Prestamo(
+    val id: Int,
+    @SerializedName("user_id") val userId: Int?,
+    val nombre: String,
+    val tipo: String?,
+    val acreedor: String?,
+    @SerializedName("monto_original") val montoOriginal: String,
+    @SerializedName("tasa_anual") val tasaAnual: String?,
+    @SerializedName("plazo_meses") val plazoMeses: Int?,
+    @SerializedName("fecha_otorgamiento") val fechaOtorgamiento: String?,
+    @SerializedName("dia_pago") val diaPago: Int?,
+    @SerializedName("medio_pago") val medioPago: String?,
+    @SerializedName("monto_planilla") val montoPlanilla: String?,
+    val color: String?,
+    val activo: Boolean,
+    val cargos: List<CargoPrestamo>,
+    val saldo: String,
+    val cuota: String?,
+    @SerializedName("cuota_total") val cuotaTotal: String?,
+    val avance: Double?,
+    @SerializedName("proxima_fecha") val proximaFecha: String?,
+    @SerializedName("fecha_fin") val fechaFin: String?,
+    @SerializedName("meses_restantes") val mesesRestantes: Int?,
+    @SerializedName("intereses_restantes") val interesesRestantes: String?,
+    val pagos: List<PrestamoPago>? = null,
+    @SerializedName("sugerencia_pago") val sugerenciaPago: SugerenciaPago? = null
+)
+
+/** origen: efectivo | cuenta:{id} | planilla | ninguno */
+data class PrestamoPagoBody(
+    val fecha: String,
+    val capital: String,
+    val interes: String,
+    val cargos: String?,
+    val mora: String?,
+    val origen: String,
+    val comentario: String?,
+    @SerializedName("user_id") val userId: Int?
+)
+
+data class TablaResumen(
+    val meses: Int,
+    val cuota: Double?,
+    @SerializedName("total_intereses") val totalIntereses: Double,
+    @SerializedName("total_pagado") val totalPagado: Double,
+    @SerializedName("fecha_fin") val fechaFin: String?
+)
+
+data class PagarHoy(val monto: Double, @SerializedName("interes_a_hoy") val interesAHoy: Double, val ahorro: Double)
+
+data class EscenarioExtra(val monto: Double, val tabla: TablaResumen, val ahorro: Double, @SerializedName("meses_menos") val mesesMenos: Int)
+
+data class EscenarioAbono(
+    val monto: Double,
+    val modo: String,
+    val tabla: TablaResumen,
+    val ahorro: Double,
+    @SerializedName("meses_menos") val mesesMenos: Int,
+    @SerializedName("cuota_nueva") val cuotaNueva: Double?
+)
+
+data class Proyeccion(
+    val base: TablaResumen?,
+    @SerializedName("pagar_hoy") val pagarHoy: PagarHoy?,
+    @SerializedName("extra_mensual") val extraMensual: EscenarioExtra?,
+    val abono: EscenarioAbono?
+)
+
+// ---------- Ingresos (/api/ingresos) ----------
+
+data class ConceptoIngreso(val nombre: String, val tipo: String, val monto: String?, val porcentaje: String?, val tope: String?, @SerializedName("prestamo_id") val prestamoId: Int?)
+
+data class LineaRecibo(val nombre: String, val tipo: String, val monto: String, @SerializedName("prestamo_pago_id") val prestamoPagoId: Int? = null)
+
+data class Recibo(
+    val id: Int,
+    @SerializedName("user_id") val userId: Int?,
+    val fecha: String,
+    val bruto: String,
+    val neto: String,
+    val destino: String,
+    val comentario: String?,
+    val lineas: List<LineaRecibo>
+)
+
+data class FuenteIngreso(
+    val id: Int,
+    @SerializedName("user_id") val userId: Int?,
+    val nombre: String,
+    val tipo: String?,
+    val pagador: String?,
+    val frecuencia: String,
+    @SerializedName("dia_pago") val diaPago: Int?,
+    @SerializedName("dia_pago_2") val diaPago2: Int?,
+    @SerializedName("monto_bruto") val montoBruto: String?,
+    val destino: String?,
+    val color: String?,
+    val activo: Boolean,
+    val conceptos: List<ConceptoIngreso>,
+    val recibos: List<Recibo>? = null
+)
+
+data class LineaPropuesta(val nombre: String, val tipo: String, val monto: Double, @SerializedName("prestamo_id") val prestamoId: Int?)
+
+data class Propuesta(val bruto: Double, val lineas: List<LineaPropuesta>, val neto: Double)
+
+data class LineaReciboBody(val nombre: String, val tipo: String, val monto: String, @SerializedName("prestamo_id") val prestamoId: Int?)
+
+/** destino: efectivo | cuenta:{id} | ninguno */
+data class ReciboBody(
+    val fecha: String,
+    val bruto: String,
+    val destino: String,
+    val comentario: String?,
+    val lineas: List<LineaReciboBody>,
+    @SerializedName("user_id") val userId: Int?
 )
 
 // ---------- Cuentas (/api/cuentas) ----------

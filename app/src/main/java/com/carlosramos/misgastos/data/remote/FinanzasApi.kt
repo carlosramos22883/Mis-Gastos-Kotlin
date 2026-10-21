@@ -1,6 +1,16 @@
 package com.carlosramos.misgastos.data.remote
 
+import com.carlosramos.misgastos.data.remote.dto.Catalogos
 import com.carlosramos.misgastos.data.remote.dto.Categoria
+import com.carlosramos.misgastos.data.remote.dto.ContactoBody
+import com.carlosramos.misgastos.data.remote.dto.DeudaBody
+import com.carlosramos.misgastos.data.remote.dto.DeudaPagoBody
+import com.carlosramos.misgastos.data.remote.dto.FuenteIngreso
+import com.carlosramos.misgastos.data.remote.dto.Prestamo
+import com.carlosramos.misgastos.data.remote.dto.PrestamoPagoBody
+import com.carlosramos.misgastos.data.remote.dto.Propuesta
+import com.carlosramos.misgastos.data.remote.dto.Proyeccion
+import com.carlosramos.misgastos.data.remote.dto.ReciboBody
 import com.carlosramos.misgastos.data.remote.dto.Cuenta
 import com.carlosramos.misgastos.data.remote.dto.MovimientoCuenta
 import com.carlosramos.misgastos.data.remote.dto.MovimientoCuentaBody
@@ -43,7 +53,10 @@ interface FinanzasApi {
     suspend fun categorias(): Response<Envoltura<List<Categoria>>>
 
     @GET("contactos")
-    suspend fun contactos(): Response<Envoltura<List<Contacto>>>
+    suspend fun contactos(@Query("filtro") filtro: String? = null): Response<Envoltura<List<Contacto>>>
+
+    @GET("catalogos")
+    suspend fun catalogos(): Response<Envoltura<Catalogos>>
 
     // ----- Efectivo -----
 
@@ -140,4 +153,67 @@ interface FinanzasApi {
 
     @DELETE("tarjetas/{id}/movimientos/{mov}")
     suspend fun eliminarMovimientoTarjeta(@Path("id") tarjetaId: Int, @Path("mov") id: Int): Response<Unit>
+
+    // ----- Contactos y lo que nos deben -----
+
+    @GET("contactos/{id}")
+    suspend fun contacto(@Path("id") id: Int): Response<Envoltura<Contacto>>
+
+    @POST("contactos")
+    suspend fun crearContacto(@Body body: ContactoBody): Response<Envoltura<Contacto>>
+
+    @PUT("contactos/{id}")
+    suspend fun editarContacto(@Path("id") id: Int, @Body body: ContactoBody): Response<Envoltura<Contacto>>
+
+    @POST("contactos/{id}/deudas")
+    suspend fun crearDeuda(@Path("id") contactoId: Int, @Body body: DeudaBody): Response<Envoltura<Contacto>>
+
+    @DELETE("deudas/{id}")
+    suspend fun eliminarDeuda(@Path("id") id: Int): Response<Unit>
+
+    @POST("contactos/{id}/pagos")
+    suspend fun crearPagoDeuda(@Path("id") contactoId: Int, @Body body: DeudaPagoBody): Response<Envoltura<Contacto>>
+
+    @DELETE("deuda-pagos/{id}")
+    suspend fun eliminarPagoDeuda(@Path("id") id: Int): Response<Unit>
+
+    // ----- Préstamos -----
+
+    @GET("prestamos")
+    suspend fun prestamos(): Response<Envoltura<List<Prestamo>>>
+
+    @GET("prestamos/{id}")
+    suspend fun prestamo(@Path("id") id: Int): Response<Envoltura<Prestamo>>
+
+    /** modo del abono: plazo (se acorta) | cuota (baja la cuota) */
+    @GET("prestamos/{id}/proyeccion")
+    suspend fun proyeccion(
+        @Path("id") id: Int,
+        @Query("extra_mensual") extraMensual: String?,
+        @Query("abono") abono: String?,
+        @Query("modo") modo: String?
+    ): Response<Envoltura<Proyeccion>>
+
+    @POST("prestamos/{id}/pagos")
+    suspend fun crearPagoPrestamo(@Path("id") id: Int, @Body body: PrestamoPagoBody): Response<Envoltura<Prestamo>>
+
+    @DELETE("prestamo-pagos/{id}")
+    suspend fun eliminarPagoPrestamo(@Path("id") id: Int): Response<Unit>
+
+    // ----- Ingresos -----
+
+    @GET("ingresos")
+    suspend fun ingresos(): Response<Envoltura<List<FuenteIngreso>>>
+
+    @GET("ingresos/{id}")
+    suspend fun ingreso(@Path("id") id: Int): Response<Envoltura<FuenteIngreso>>
+
+    @GET("ingresos/{id}/propuesta")
+    suspend fun propuesta(@Path("id") id: Int, @Query("bruto") bruto: String?): Response<Envoltura<Propuesta>>
+
+    @POST("ingresos/{id}/recibos")
+    suspend fun crearRecibo(@Path("id") id: Int, @Body body: ReciboBody): Response<Envoltura<FuenteIngreso>>
+
+    @DELETE("recibos/{id}")
+    suspend fun eliminarRecibo(@Path("id") id: Int): Response<Unit>
 }

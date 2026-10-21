@@ -14,6 +14,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.EventNote
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.AccountBalance
+import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.RequestQuote
+import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -55,7 +58,13 @@ import com.carlosramos.misgastos.ui.common.FilaValor
 import com.carlosramos.misgastos.ui.common.Seccion
 import com.carlosramos.misgastos.ui.compromisos.CompromisoDetalleScreen
 import com.carlosramos.misgastos.ui.compromisos.CompromisosScreen
+import com.carlosramos.misgastos.ui.contactos.ContactoDetalleScreen
+import com.carlosramos.misgastos.ui.contactos.ContactosScreen
 import com.carlosramos.misgastos.ui.cuentas.CuentaDetalleScreen
+import com.carlosramos.misgastos.ui.ingresos.IngresoDetalleScreen
+import com.carlosramos.misgastos.ui.ingresos.IngresosScreen
+import com.carlosramos.misgastos.ui.prestamos.PrestamoDetalleScreen
+import com.carlosramos.misgastos.ui.prestamos.PrestamosScreen
 import com.carlosramos.misgastos.ui.cuentas.CuentasScreen
 import com.carlosramos.misgastos.ui.efectivo.EfectivoScreen
 import com.carlosramos.misgastos.ui.tarjetas.TarjetaDetalleScreen
@@ -108,7 +117,8 @@ fun MainScreen(onCerrarSesion: () -> Unit, viewModel: MainViewModel = hiltViewMo
                 pestanas.forEach { p ->
                     NavigationBarItem(
                         selected = ruta == p.ruta || (p.ruta == "compromisos" && ruta.startsWith("compromiso/")) ||
-                            (p.ruta == "tarjetas" && ruta.startsWith("tarjeta/")) || (p.ruta == "mas" && ruta.startsWith("cuenta")),
+                            (p.ruta == "tarjetas" && ruta.startsWith("tarjeta/")) ||
+                            (p.ruta == "mas" && listOf("cuenta", "contacto", "prestamo", "ingreso").any { ruta.startsWith(it) }),
                         onClick = { ir(p.ruta) },
                         icon = { Icon(p.icono, contentDescription = null) },
                         label = { Text(p.texto, maxLines = 1, softWrap = false, style = MaterialTheme.typography.labelSmall) }
@@ -124,7 +134,9 @@ fun MainScreen(onCerrarSesion: () -> Unit, viewModel: MainViewModel = hiltViewMo
                     onVerEfectivo = { ir("efectivo") },
                     onVerCompromisos = { ir("compromisos") },
                     onAbrirCuenta = { nav.navigate("cuenta/$it") },
-                    onAbrirTarjeta = { nav.navigate("tarjeta/$it") }
+                    onAbrirTarjeta = { nav.navigate("tarjeta/$it") },
+                    onVerPrestamos = { nav.navigate("prestamos") },
+                    onVerNosDeben = { nav.navigate("contactos?deben=true") }
                 )
             }
             composable("efectivo") { EfectivoScreen() }
@@ -140,13 +152,29 @@ fun MainScreen(onCerrarSesion: () -> Unit, viewModel: MainViewModel = hiltViewMo
             composable("cuenta/{id}", arguments = listOf(navArgument("id") { type = NavType.IntType })) {
                 CuentaDetalleScreen(onVolver = { nav.popBackStack() })
             }
-            composable("mas") { MasScreen(viewModel, salir, onCuentas = { nav.navigate("cuentas") }) }
+            composable("contactos?deben={deben}", arguments = listOf(navArgument("deben") { type = NavType.BoolType; defaultValue = false })) { e ->
+                ContactosScreen(
+                    soloDeben = e.arguments?.getBoolean("deben") == true, onAbrir = { nav.navigate("contacto/$it") },
+                    onNuevo = { nav.navigate("contacto/0") }, onVolver = { nav.popBackStack() }
+                )
+            }
+            composable("contacto/{id}", arguments = listOf(navArgument("id") { type = NavType.IntType })) {
+                ContactoDetalleScreen(
+                    onVolver = { nav.popBackStack() },
+                    onCreado = { id -> nav.navigate("contacto/$id") { popUpTo("contacto/{id}") { inclusive = true } } }
+                )
+            }
+            composable("prestamos") { PrestamosScreen(onAbrir = { nav.navigate("prestamo/$it") }, onVolver = { nav.popBackStack() }) }
+            composable("prestamo/{id}", arguments = listOf(navArgument("id") { type = NavType.IntType })) { PrestamoDetalleScreen(onVolver = { nav.popBackStack() }) }
+            composable("ingresos") { IngresosScreen(onAbrir = { nav.navigate("ingreso/$it") }, onVolver = { nav.popBackStack() }) }
+            composable("ingreso/{id}", arguments = listOf(navArgument("id") { type = NavType.IntType })) { IngresoDetalleScreen(onVolver = { nav.popBackStack() }) }
+            composable("mas") { MasScreen(viewModel, salir, ir = { nav.navigate(it) }) }
         }
     }
 }
 
 @Composable
-private fun MasScreen(viewModel: MainViewModel, onCerrarSesion: () -> Unit, onCuentas: () -> Unit) {
+private fun MasScreen(viewModel: MainViewModel, onCerrarSesion: () -> Unit, ir: (String) -> Unit) {
     val comunes by viewModel.comunes.collectAsStateWithLifecycle()
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         comunes?.let { c ->
@@ -166,18 +194,19 @@ private fun MasScreen(viewModel: MainViewModel, onCerrarSesion: () -> Unit, onCu
             }
         }
         Seccion("Módulos") {
-            Row(Modifier.fillMaxWidth().clickable(onClick = onCuentas).padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.AccountBalance, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                Spacer(Modifier.width(12.dp))
-                Text("Cuentas y billeteras", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+            listOf(
+                Triple("cuentas", "Cuentas y billeteras", Icons.Default.AccountBalance),
+                Triple("contactos", "Contactos y \"nos deben\"", Icons.Default.People),
+                Triple("prestamos", "Préstamos", Icons.Default.RequestQuote),
+                Triple("ingresos", "Ingresos", Icons.Default.Savings)
+            ).forEach { (ruta, texto, icono) ->
+                Row(Modifier.fillMaxWidth().clickable { ir(ruta) }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(icono, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(12.dp))
+                    Text(texto, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+                }
             }
-        }
-        Seccion("Próximamente en la app") {
-            Text(
-                "Contactos y \"nos deben\", préstamos e ingresos. Mientras tanto están en la web.",
-                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
         OutlinedButton(onClick = onCerrarSesion, modifier = Modifier.fillMaxWidth()) {
             Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null)

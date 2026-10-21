@@ -12,6 +12,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -110,8 +113,11 @@ fun Seccion(titulo: String, modifier: Modifier = Modifier, accion: (@Composable 
 
 /** Fila "etiqueta ...... valor". */
 @Composable
-fun FilaValor(etiqueta: String, valor: String, colorValor: Color = Color.Unspecified, negrita: Boolean = false) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+fun FilaValor(etiqueta: String, valor: String, colorValor: Color = Color.Unspecified, negrita: Boolean = false, onClick: (() -> Unit)? = null) {
+    Row(
+        Modifier.fillMaxWidth().then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier).padding(vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         Text(etiqueta, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
         Text(valor, style = MaterialTheme.typography.bodyMedium, color = colorValor, fontWeight = if (negrita) FontWeight.SemiBold else FontWeight.Normal)
     }
@@ -226,4 +232,73 @@ fun CampoFecha(etiqueta: String, valor: String, onCambio: (String) -> Unit, desd
             dismissButton = { TextButton(onClick = { abierto = false }) { Text("Cancelar") } }
         ) { DatePicker(state = estado) }
     }
+}
+
+/** Campo de dinero: solo dígitos y punto, teclado decimal y prefijo "$". */
+@Composable
+fun CampoMonto(etiqueta: String, valor: String, onCambio: (String) -> Unit, modifier: Modifier = Modifier, error: String? = null, apoyo: String? = null) {
+    OutlinedTextField(
+        value = valor, onValueChange = { onCambio(it.replace(',', '.').filter { c -> c.isDigit() || c == '.' }) },
+        label = { Text(etiqueta) }, prefix = { Text("$ ") }, singleLine = true,
+        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
+        isError = error != null, supportingText = (error ?: apoyo)?.let { { Text(it) } },
+        modifier = modifier.fillMaxWidth()
+    )
+}
+
+/** Hoja inferior con título, contenido desplazable y botones Cancelar / acción principal. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun HojaFormulario(
+    titulo: String,
+    accion: String,
+    guardando: Boolean,
+    onCerrar: () -> Unit,
+    onAccion: () -> Unit,
+    error: String? = null,
+    extra: (@Composable () -> Unit)? = null,
+    contenido: @Composable ColumnScope.() -> Unit
+) {
+    androidx.compose.material3.ModalBottomSheet(onDismissRequest = onCerrar, sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        Column(
+            Modifier.fillMaxWidth().verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(horizontal = 20.dp)
+                .then(Modifier.imePadding().navigationBarsPadding()),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(titulo, style = MaterialTheme.typography.titleLarge)
+            contenido()
+            error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            Row(Modifier.fillMaxWidth().padding(bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                extra?.invoke()
+                Spacer(Modifier.weight(1f))
+                TextButton(onClick = onCerrar) { Text("Cancelar") }
+                Button(onClick = onAccion, enabled = !guardando) {
+                    if (guardando) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) else Text(accion)
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+    }
+}
+
+/** Confirmación simple para acciones que borran algo. */
+@Composable
+fun Confirmar(titulo: String, texto: String, accion: String, onConfirmar: () -> Unit, onCancelar: () -> Unit) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onCancelar,
+        title = { Text(titulo) },
+        text = { Text(texto) },
+        confirmButton = { TextButton(onClick = onConfirmar) { Text(accion, color = MaterialTheme.colorScheme.error) } },
+        dismissButton = { TextButton(onClick = onCancelar) { Text("Cancelar") } }
+    )
+}
+
+/** Nombre de un origen/destino ("efectivo", "cuenta:42", "tarjeta:7", "planilla", "ninguno"). */
+fun nombreOrigen(valor: String?, cajas: Map<String, String> = emptyMap()): String = when {
+    valor == null -> ""
+    valor == "efectivo" -> "Efectivo"
+    valor == "planilla" -> "Descuento de planilla"
+    valor == "ninguno" -> "Solo anotado"
+    valor == "transferencia" -> "Transferencia"
+    else -> cajas[valor] ?: valor.substringBefore(":").replaceFirstChar { it.uppercase() }
 }
