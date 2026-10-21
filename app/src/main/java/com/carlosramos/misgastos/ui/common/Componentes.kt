@@ -1,6 +1,7 @@
 package com.carlosramos.misgastos.ui.common
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -301,4 +302,31 @@ fun nombreOrigen(valor: String?, cajas: Map<String, String> = emptyMap()): Strin
     valor == "ninguno" -> "Solo anotado"
     valor == "transferencia" -> "Transferencia"
     else -> cajas[valor] ?: valor.substringBefore(":").replaceFirstChar { it.uppercase() }
+}
+
+/** Colores para cuentas, tarjetas y préstamos (los de la web). */
+val PALETA = listOf(
+    "#0369A1", "#0284C7", "#1155CC", "#4A86E8", "#7C3AED", "#C026D3", "#FF00FF", "#DB2777", "#DC2626", "#EA580C",
+    "#F1C232", "#FFD966", "#16A34A", "#00A651", "#B6D7A8", "#0891B2", "#434343", "#999999", "#1E293B", "#92400E"
+)
+
+/** Fila de muestras de color; la elegida lleva un borde y un ✓ (no solo el color). */
+@Composable
+fun SelectorColor(seleccion: String, onSeleccion: (String) -> Unit) {
+    Column {
+        Text("Color", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(6.dp))
+        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            PALETA.forEach { hex ->
+                val c = Formato.color(hex)
+                val elegido = hex.equals(seleccion, ignoreCase = true)
+                Box(
+                    Modifier.size(36.dp).clip(CircleShape).background(c)
+                        .then(if (elegido) Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, CircleShape) else Modifier)
+                        .clickable { onSeleccion(hex) },
+                    contentAlignment = Alignment.Center
+                ) { if (elegido) Text("✓", color = Formato.textoSobre(c), fontWeight = FontWeight.Bold) }
+            }
+        }
+    }
 }

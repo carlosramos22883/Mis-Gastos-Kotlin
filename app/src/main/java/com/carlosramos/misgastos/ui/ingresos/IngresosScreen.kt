@@ -21,6 +21,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
@@ -114,21 +116,23 @@ class IngresosViewModel @Inject constructor(private val repo: FinanzasRepository
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun IngresosScreen(onAbrir: (Int) -> Unit, onVolver: () -> Unit, viewModel: IngresosViewModel = hiltViewModel()) {
+fun IngresosScreen(onAbrir: (Int) -> Unit, onNueva: () -> Unit, onVolver: () -> Unit, viewModel: IngresosViewModel = hiltViewModel()) {
     val estado by viewModel.estado.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { if (estado.fuentes.isNotEmpty()) viewModel.cargar() }
     Scaffold(
         contentWindowInsets = WindowInsets(0),
         topBar = {
             TopAppBar(
                 title = { Text("Ingresos") }, windowInsets = WindowInsets(0),
-                navigationIcon = { IconButton(onClick = onVolver) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver") } }
+                navigationIcon = { IconButton(onClick = onVolver) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver") } },
+                actions = { IconButton(onClick = onNueva) { Icon(Icons.Default.Add, contentDescription = "Nueva fuente de ingreso") } }
             )
         }
     ) { relleno ->
         when {
             estado.cargando -> Cargando(Modifier.padding(relleno))
             estado.error != null && estado.fuentes.isEmpty() -> ErrorConReintento(estado.error!!, { viewModel.cargar() }, Modifier.padding(relleno))
-            estado.fuentes.isEmpty() -> Vacio("No hay fuentes de ingreso. Créalas desde la web.", Modifier.padding(relleno))
+            estado.fuentes.isEmpty() -> Vacio("No hay fuentes de ingreso. Créala con el botón +.", Modifier.padding(relleno))
             else -> LazyColumn(Modifier.padding(relleno).fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(estado.fuentes, key = { it.id }) { f ->
                     Card(Modifier.fillMaxWidth().clickable { onAbrir(f.id) }, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
@@ -258,13 +262,14 @@ class IngresoDetalleViewModel @Inject constructor(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun IngresoDetalleScreen(onVolver: () -> Unit, viewModel: IngresoDetalleViewModel = hiltViewModel()) {
+fun IngresoDetalleScreen(onVolver: () -> Unit, onEditar: (Int) -> Unit, viewModel: IngresoDetalleViewModel = hiltViewModel()) {
     val estado by viewModel.estado.collectAsStateWithLifecycle()
     val form by viewModel.form.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     var borrar by remember { mutableStateOf<Recibo?>(null) }
     LaunchedEffect(estado.mensaje) { estado.mensaje?.let { snackbar.showSnackbar(it); viewModel.mensajeVisto() } }
     val f = estado.fuente
+    LaunchedEffect(Unit) { if (estado.fuente != null) viewModel.cargar() }
     val cajas = estado.destinos.associate { (k, v) -> k to v.substringBefore(" (") }
 
     Scaffold(
@@ -272,7 +277,8 @@ fun IngresoDetalleScreen(onVolver: () -> Unit, viewModel: IngresoDetalleViewMode
         topBar = {
             TopAppBar(
                 title = { Text(f?.nombre ?: "Ingreso", maxLines = 1, overflow = TextOverflow.Ellipsis) }, windowInsets = WindowInsets(0),
-                navigationIcon = { IconButton(onClick = onVolver) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver") } }
+                navigationIcon = { IconButton(onClick = onVolver) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver") } },
+                actions = { if (f != null) IconButton(onClick = { onEditar(f.id) }) { Icon(Icons.Default.Edit, contentDescription = "Editar fuente") } }
             )
         },
         snackbarHost = { SnackbarHost(snackbar) }

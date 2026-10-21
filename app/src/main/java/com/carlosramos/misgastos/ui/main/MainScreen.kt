@@ -56,7 +56,12 @@ import com.carlosramos.misgastos.data.repository.Sesion
 import com.carlosramos.misgastos.ui.common.Avatar
 import com.carlosramos.misgastos.ui.common.FilaValor
 import com.carlosramos.misgastos.ui.common.Seccion
+import com.carlosramos.misgastos.ui.altas.CuentaFormScreen
+import com.carlosramos.misgastos.ui.altas.FuenteFormScreen
+import com.carlosramos.misgastos.ui.altas.PrestamoFormScreen
+import com.carlosramos.misgastos.ui.altas.TarjetaFormScreen
 import com.carlosramos.misgastos.ui.compromisos.CompromisoDetalleScreen
+import com.carlosramos.misgastos.ui.compromisos.CompromisoFormScreen
 import com.carlosramos.misgastos.ui.compromisos.CompromisosScreen
 import com.carlosramos.misgastos.ui.contactos.ContactoDetalleScreen
 import com.carlosramos.misgastos.ui.contactos.ContactosScreen
@@ -116,9 +121,9 @@ fun MainScreen(onCerrarSesion: () -> Unit, viewModel: MainViewModel = hiltViewMo
             NavigationBar {
                 pestanas.forEach { p ->
                     NavigationBarItem(
-                        selected = ruta == p.ruta || (p.ruta == "compromisos" && ruta.startsWith("compromiso/")) ||
-                            (p.ruta == "tarjetas" && ruta.startsWith("tarjeta/")) ||
-                            (p.ruta == "mas" && listOf("cuenta", "contacto", "prestamo", "ingreso").any { ruta.startsWith(it) }),
+                        selected = ruta == p.ruta || (p.ruta == "compromisos" && ruta.startsWith("compromiso")) ||
+                            (p.ruta == "tarjetas" && ruta.startsWith("tarjeta")) ||
+                            (p.ruta == "mas" && listOf("cuenta", "contacto", "prestamo", "ingreso", "fuente").any { ruta.startsWith(it) }),
                         onClick = { ir(p.ruta) },
                         icon = { Icon(p.icono, contentDescription = null) },
                         label = { Text(p.texto, maxLines = 1, softWrap = false, style = MaterialTheme.typography.labelSmall) }
@@ -140,17 +145,20 @@ fun MainScreen(onCerrarSesion: () -> Unit, viewModel: MainViewModel = hiltViewMo
                 )
             }
             composable("efectivo") { EfectivoScreen() }
-            composable("compromisos") { CompromisosScreen(onAbrir = { nav.navigate("compromiso/$it") }) }
+            composable("compromisos") { CompromisosScreen(onAbrir = { nav.navigate("compromiso/$it") }, onNuevo = { nav.navigate("compromiso-form/0") }) }
+            composable("compromiso-form/{id}", arguments = listOf(navArgument("id") { type = NavType.IntType })) {
+                CompromisoFormScreen(onListo = { nav.popBackStack() }, onVolver = { nav.popBackStack() })
+            }
             composable("compromiso/{id}", arguments = listOf(navArgument("id") { type = NavType.IntType })) {
-                CompromisoDetalleScreen(onVolver = { nav.popBackStack() })
+                CompromisoDetalleScreen(onVolver = { nav.popBackStack() }, onEditar = { nav.navigate("compromiso-form/$it") })
             }
-            composable("tarjetas") { TarjetasScreen(onAbrir = { nav.navigate("tarjeta/$it") }) }
+            composable("tarjetas") { TarjetasScreen(onAbrir = { nav.navigate("tarjeta/$it") }, onNueva = { nav.navigate("tarjeta-form/0") }) }
             composable("tarjeta/{id}", arguments = listOf(navArgument("id") { type = NavType.IntType })) {
-                TarjetaDetalleScreen(onVolver = { nav.popBackStack() }, onAbrirCompromiso = { nav.navigate("compromiso/$it") })
+                TarjetaDetalleScreen(onVolver = { nav.popBackStack() }, onAbrirCompromiso = { nav.navigate("compromiso/$it") }, onEditar = { nav.navigate("tarjeta-form/$it") })
             }
-            composable("cuentas") { CuentasScreen(onAbrir = { nav.navigate("cuenta/$it") }, onVolver = { nav.popBackStack() }) }
+            composable("cuentas") { CuentasScreen(onAbrir = { nav.navigate("cuenta/$it") }, onNueva = { nav.navigate("cuenta-form/0") }, onVolver = { nav.popBackStack() }) }
             composable("cuenta/{id}", arguments = listOf(navArgument("id") { type = NavType.IntType })) {
-                CuentaDetalleScreen(onVolver = { nav.popBackStack() })
+                CuentaDetalleScreen(onVolver = { nav.popBackStack() }, onEditar = { nav.navigate("cuenta-form/$it") })
             }
             composable("contactos?deben={deben}", arguments = listOf(navArgument("deben") { type = NavType.BoolType; defaultValue = false })) { e ->
                 ContactosScreen(
@@ -159,15 +167,19 @@ fun MainScreen(onCerrarSesion: () -> Unit, viewModel: MainViewModel = hiltViewMo
                 )
             }
             composable("contacto/{id}", arguments = listOf(navArgument("id") { type = NavType.IntType })) {
-                ContactoDetalleScreen(
-                    onVolver = { nav.popBackStack() },
-                    onCreado = { id -> nav.navigate("contacto/$id") { popUpTo("contacto/{id}") { inclusive = true } } }
-                )
+                ContactoDetalleScreen(onVolver = { nav.popBackStack() })
             }
-            composable("prestamos") { PrestamosScreen(onAbrir = { nav.navigate("prestamo/$it") }, onVolver = { nav.popBackStack() }) }
-            composable("prestamo/{id}", arguments = listOf(navArgument("id") { type = NavType.IntType })) { PrestamoDetalleScreen(onVolver = { nav.popBackStack() }) }
-            composable("ingresos") { IngresosScreen(onAbrir = { nav.navigate("ingreso/$it") }, onVolver = { nav.popBackStack() }) }
-            composable("ingreso/{id}", arguments = listOf(navArgument("id") { type = NavType.IntType })) { IngresoDetalleScreen(onVolver = { nav.popBackStack() }) }
+            composable("prestamos") { PrestamosScreen(onAbrir = { nav.navigate("prestamo/$it") }, onNuevo = { nav.navigate("prestamo-form/0") }, onVolver = { nav.popBackStack() }) }
+            composable("prestamo/{id}", arguments = listOf(navArgument("id") { type = NavType.IntType })) { PrestamoDetalleScreen(onVolver = { nav.popBackStack() }, onEditar = { nav.navigate("prestamo-form/$it") }) }
+            composable("ingresos") { IngresosScreen(onAbrir = { nav.navigate("ingreso/$it") }, onNueva = { nav.navigate("fuente-form/0") }, onVolver = { nav.popBackStack() }) }
+            composable("ingreso/{id}", arguments = listOf(navArgument("id") { type = NavType.IntType })) { IngresoDetalleScreen(onVolver = { nav.popBackStack() }, onEditar = { nav.navigate("fuente-form/$it") }) }
+            // Formularios de alta y edición (id 0 = nuevo). Al eliminar se vuelve a la lista, no al detalle que ya no existe.
+            val alTerminar = { lista: String -> { eliminado: Boolean -> if (eliminado) { if (!nav.popBackStack(lista, false)) { nav.popBackStack(); nav.popBackStack() } } else nav.popBackStack(); Unit } }
+            val conId = listOf(navArgument("id") { type = NavType.IntType })
+            composable("cuenta-form/{id}", arguments = conId) { CuentaFormScreen(alTerminar("cuentas"), { nav.popBackStack() }) }
+            composable("tarjeta-form/{id}", arguments = conId) { TarjetaFormScreen(alTerminar("tarjetas"), { nav.popBackStack() }) }
+            composable("prestamo-form/{id}", arguments = conId) { PrestamoFormScreen(alTerminar("prestamos"), { nav.popBackStack() }) }
+            composable("fuente-form/{id}", arguments = conId) { FuenteFormScreen(alTerminar("ingresos"), { nav.popBackStack() }) }
             composable("mas") { MasScreen(viewModel, salir, ir = { nav.navigate(it) }) }
         }
     }

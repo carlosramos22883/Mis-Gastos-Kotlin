@@ -76,7 +76,7 @@ class FinanzasRepository @Inject constructor(
     suspend fun hogar() = llamar { api.hogar() }.datos()
     suspend fun categorias() = llamar { api.categorias() }.datos()
     suspend fun contactos(filtro: String? = null) = llamar { api.contactos(filtro) }.datos()
-    suspend fun catalogos() = llamar { api.catalogos() }.datos()
+    suspend fun catalogos() = llamar { api.catalogos() }
 
     suspend fun efectivo(ciclo: String?, tipo: String?, pagina: Int) = llamar { api.efectivo(ciclo, tipo, pagina) }
     suspend fun guardarEfectivo(id: Int?, body: MovimientoEfectivoBody) =
@@ -85,6 +85,8 @@ class FinanzasRepository @Inject constructor(
 
     suspend fun compromisos(periodo: String, estado: String?, pagina: Int) = llamar { api.compromisos(periodo, estado, pagina) }
     suspend fun compromiso(id: Int) = llamar { api.compromiso(id) }.datos()
+    suspend fun crearCompromiso(body: com.carlosramos.misgastos.data.remote.dto.CompromisoBody) = llamarSinCuerpo { api.crearCompromiso(body) }
+    suspend fun editarCompromiso(id: Int, body: com.carlosramos.misgastos.data.remote.dto.CompromisoBody) = llamar { api.editarCompromiso(id, body) }.datos()
     suspend fun origenesPago(id: Int) = llamar { api.origenesPago(id) }.datos()
     suspend fun pagarCompromiso(id: Int, body: PagoCompromisoBody) = llamar { api.pagarCompromiso(id, body) }.datos()
     suspend fun cancelarCompromiso(id: Int, serie: Boolean) =
@@ -131,6 +133,19 @@ class FinanzasRepository @Inject constructor(
         is Resultado.Ok -> Resultado.Ok(r.datos.destinos)
         is Resultado.Falla -> r
     }
+
+    suspend fun guardarCuenta(id: Int?, b: com.carlosramos.misgastos.data.remote.dto.CuentaBody) =
+        llamar { if (id == null) api.crearCuenta(b) else api.editarCuenta(id, b) }.datos()
+    suspend fun eliminarCuenta(id: Int) = llamarSinCuerpo { api.eliminarCuenta(id) }
+    suspend fun guardarTarjeta(id: Int?, b: com.carlosramos.misgastos.data.remote.dto.TarjetaBody) =
+        llamar { if (id == null) api.crearTarjeta(b) else api.editarTarjeta(id, b) }.datos()
+    suspend fun eliminarTarjeta(id: Int) = llamarSinCuerpo { api.eliminarTarjeta(id) }
+    suspend fun guardarPrestamo(id: Int?, b: com.carlosramos.misgastos.data.remote.dto.PrestamoBody) =
+        llamar { if (id == null) api.crearPrestamo(b) else api.editarPrestamo(id, b) }.datos()
+    suspend fun eliminarPrestamo(id: Int) = llamarSinCuerpo { api.eliminarPrestamo(id) }
+    suspend fun guardarFuente(id: Int?, b: com.carlosramos.misgastos.data.remote.dto.FuenteBody) =
+        llamar { if (id == null) api.crearFuente(b) else api.editarFuente(id, b) }.datos()
+    suspend fun eliminarFuente(id: Int) = llamarSinCuerpo { api.eliminarFuente(id) }
 
     private suspend fun <T> llamar(peticion: suspend () -> Response<T>): Resultado<T> = try {
         val respuesta = peticion()

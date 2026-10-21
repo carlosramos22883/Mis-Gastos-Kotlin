@@ -1,6 +1,10 @@
 package com.carlosramos.misgastos.data.remote
 
 import com.carlosramos.misgastos.data.remote.dto.Catalogos
+import com.carlosramos.misgastos.data.remote.dto.CuentaBody
+import com.carlosramos.misgastos.data.remote.dto.FuenteBody
+import com.carlosramos.misgastos.data.remote.dto.PrestamoBody
+import com.carlosramos.misgastos.data.remote.dto.TarjetaBody
 import com.carlosramos.misgastos.data.remote.dto.Categoria
 import com.carlosramos.misgastos.data.remote.dto.ContactoBody
 import com.carlosramos.misgastos.data.remote.dto.DeudaBody
@@ -22,6 +26,7 @@ import com.carlosramos.misgastos.data.remote.dto.Tarjeta
 import com.carlosramos.misgastos.data.remote.dto.TarjetaDetalle
 import com.carlosramos.misgastos.data.remote.dto.TransferenciaBody
 import com.carlosramos.misgastos.data.remote.dto.Compromiso
+import com.carlosramos.misgastos.data.remote.dto.CompromisoBody
 import com.carlosramos.misgastos.data.remote.dto.Contacto
 import com.carlosramos.misgastos.data.remote.dto.Dashboard
 import com.carlosramos.misgastos.data.remote.dto.Envoltura
@@ -55,8 +60,9 @@ interface FinanzasApi {
     @GET("contactos")
     suspend fun contactos(@Query("filtro") filtro: String? = null): Response<Envoltura<List<Contacto>>>
 
+    /** Sin envoltura "data": responde los catálogos directamente. */
     @GET("catalogos")
-    suspend fun catalogos(): Response<Envoltura<Catalogos>>
+    suspend fun catalogos(): Response<Catalogos>
 
     // ----- Efectivo -----
 
@@ -88,6 +94,13 @@ interface FinanzasApi {
         @Query("page") pagina: Int,
         @Query("per_page") porPagina: Int = 30
     ): Response<PaginaCompromisos>
+
+    /** Responde el primer pago generado; en recurrentes además recurrente_id y pagos_generados. */
+    @POST("compromisos")
+    suspend fun crearCompromiso(@Body body: CompromisoBody): Response<Unit>
+
+    @PUT("compromisos/{id}")
+    suspend fun editarCompromiso(@Path("id") id: Int, @Body body: CompromisoBody): Response<Envoltura<Compromiso>>
 
     @GET("compromisos/{id}")
     suspend fun compromiso(@Path("id") id: Int): Response<Envoltura<Compromiso>>
@@ -216,4 +229,22 @@ interface FinanzasApi {
 
     @DELETE("recibos/{id}")
     suspend fun eliminarRecibo(@Path("id") id: Int): Response<Unit>
+
+    // ----- Alta, edición y baja -----
+
+    @POST("cuentas") suspend fun crearCuenta(@Body body: CuentaBody): Response<Envoltura<Cuenta>>
+    @PUT("cuentas/{id}") suspend fun editarCuenta(@Path("id") id: Int, @Body body: CuentaBody): Response<Envoltura<Cuenta>>
+    @DELETE("cuentas/{id}") suspend fun eliminarCuenta(@Path("id") id: Int): Response<Unit>
+
+    @POST("tarjetas") suspend fun crearTarjeta(@Body body: TarjetaBody): Response<Envoltura<Tarjeta>>
+    @PUT("tarjetas/{id}") suspend fun editarTarjeta(@Path("id") id: Int, @Body body: TarjetaBody): Response<Envoltura<Tarjeta>>
+    @DELETE("tarjetas/{id}") suspend fun eliminarTarjeta(@Path("id") id: Int): Response<Unit>
+
+    @POST("prestamos") suspend fun crearPrestamo(@Body body: PrestamoBody): Response<Envoltura<Prestamo>>
+    @PUT("prestamos/{id}") suspend fun editarPrestamo(@Path("id") id: Int, @Body body: PrestamoBody): Response<Envoltura<Prestamo>>
+    @DELETE("prestamos/{id}") suspend fun eliminarPrestamo(@Path("id") id: Int): Response<Unit>
+
+    @POST("ingresos") suspend fun crearFuente(@Body body: FuenteBody): Response<Envoltura<FuenteIngreso>>
+    @PUT("ingresos/{id}") suspend fun editarFuente(@Path("id") id: Int, @Body body: FuenteBody): Response<Envoltura<FuenteIngreso>>
+    @DELETE("ingresos/{id}") suspend fun eliminarFuente(@Path("id") id: Int): Response<Unit>
 }

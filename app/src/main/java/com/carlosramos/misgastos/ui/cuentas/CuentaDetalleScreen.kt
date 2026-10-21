@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -199,7 +200,7 @@ class CuentaDetalleViewModel @Inject constructor(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CuentaDetalleScreen(onVolver: () -> Unit, viewModel: CuentaDetalleViewModel = hiltViewModel()) {
+fun CuentaDetalleScreen(onVolver: () -> Unit, onEditar: (Int) -> Unit, viewModel: CuentaDetalleViewModel = hiltViewModel()) {
     val estado by viewModel.estado.collectAsStateWithLifecycle()
     val form by viewModel.form.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
@@ -207,13 +208,15 @@ fun CuentaDetalleScreen(onVolver: () -> Unit, viewModel: CuentaDetalleViewModel 
     var borrarTransferencia by remember { mutableStateOf<TransferenciaMini?>(null) }
     LaunchedEffect(estado.mensaje) { estado.mensaje?.let { snackbar.showSnackbar(it); viewModel.mensajeVisto() } }
     val c = estado.cuenta
+    LaunchedEffect(Unit) { if (estado.cuenta != null) viewModel.cargar() }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0),
         topBar = {
             TopAppBar(
                 title = { Text(c?.nombre ?: "Cuenta", maxLines = 1, overflow = TextOverflow.Ellipsis) }, windowInsets = WindowInsets(0),
-                navigationIcon = { IconButton(onClick = onVolver) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver") } }
+                navigationIcon = { IconButton(onClick = onVolver) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver") } },
+                actions = { if (c != null) IconButton(onClick = { onEditar(c.id) }) { Icon(Icons.Default.Edit, contentDescription = "Editar cuenta") } }
             )
         },
         snackbarHost = { SnackbarHost(snackbar) },

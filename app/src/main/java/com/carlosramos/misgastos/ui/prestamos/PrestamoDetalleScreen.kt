@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -188,13 +189,14 @@ class PrestamoDetalleViewModel @Inject constructor(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PrestamoDetalleScreen(onVolver: () -> Unit, viewModel: PrestamoDetalleViewModel = hiltViewModel()) {
+fun PrestamoDetalleScreen(onVolver: () -> Unit, onEditar: (Int) -> Unit, viewModel: PrestamoDetalleViewModel = hiltViewModel()) {
     val estado by viewModel.estado.collectAsStateWithLifecycle()
     val pago by viewModel.pago.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     var borrar by remember { mutableStateOf<PrestamoPago?>(null) }
     LaunchedEffect(estado.mensaje) { estado.mensaje?.let { snackbar.showSnackbar(it); viewModel.mensajeVisto() } }
     val p = estado.prestamo
+    LaunchedEffect(Unit) { if (estado.prestamo != null) viewModel.cargar() }
     val cajas = estado.origenes.associate { (k, v) -> k to v.substringBefore(" (") }
 
     Scaffold(
@@ -202,7 +204,8 @@ fun PrestamoDetalleScreen(onVolver: () -> Unit, viewModel: PrestamoDetalleViewMo
         topBar = {
             TopAppBar(
                 title = { Text(p?.nombre ?: "Préstamo", maxLines = 1, overflow = TextOverflow.Ellipsis) }, windowInsets = WindowInsets(0),
-                navigationIcon = { IconButton(onClick = onVolver) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver") } }
+                navigationIcon = { IconButton(onClick = onVolver) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver") } },
+                actions = { if (p != null) IconButton(onClick = { onEditar(p.id) }) { Icon(Icons.Default.Edit, contentDescription = "Editar préstamo") } }
             )
         },
         snackbarHost = { SnackbarHost(snackbar) }

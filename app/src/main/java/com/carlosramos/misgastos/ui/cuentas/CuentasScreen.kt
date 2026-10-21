@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.Card
@@ -82,7 +83,7 @@ class CuentasViewModel @Inject constructor(private val repo: FinanzasRepository)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CuentasScreen(onAbrir: (Int) -> Unit, onVolver: () -> Unit, viewModel: CuentasViewModel = hiltViewModel()) {
+fun CuentasScreen(onAbrir: (Int) -> Unit, onNueva: () -> Unit, onVolver: () -> Unit, viewModel: CuentasViewModel = hiltViewModel()) {
     val estado by viewModel.estado.collectAsStateWithLifecycle()
     var transferir by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { if (estado.cuentas.isNotEmpty()) viewModel.cargar() }
@@ -92,7 +93,8 @@ fun CuentasScreen(onAbrir: (Int) -> Unit, onVolver: () -> Unit, viewModel: Cuent
         topBar = {
             TopAppBar(
                 title = { Text("Cuentas y billeteras") }, windowInsets = WindowInsets(0),
-                navigationIcon = { IconButton(onClick = onVolver) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver") } }
+                navigationIcon = { IconButton(onClick = onVolver) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver") } },
+                actions = { IconButton(onClick = onNueva) { Icon(Icons.Default.Add, contentDescription = "Nueva cuenta") } }
             )
         },
         floatingActionButton = {
@@ -102,7 +104,7 @@ fun CuentasScreen(onAbrir: (Int) -> Unit, onVolver: () -> Unit, viewModel: Cuent
         when {
             estado.cargando -> Cargando(Modifier.padding(relleno))
             estado.error != null && estado.cuentas.isEmpty() -> ErrorConReintento(estado.error!!, { viewModel.cargar() }, Modifier.padding(relleno))
-            estado.cuentas.isEmpty() -> Vacio("Aún no hay cuentas. Créalas desde la web.", Modifier.padding(relleno))
+            estado.cuentas.isEmpty() -> Vacio("Aún no hay cuentas. Créala con el botón +.", Modifier.padding(relleno))
             else -> LazyColumn(Modifier.padding(relleno).fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 item {
                     val total = estado.cuentas.filter { it.activo }.sumOf { it.saldo.toDoubleOrNull() ?: 0.0 }

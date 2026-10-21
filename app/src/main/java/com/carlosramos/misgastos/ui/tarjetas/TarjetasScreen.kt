@@ -16,7 +16,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -78,16 +83,19 @@ class TarjetasViewModel @Inject constructor(private val repo: FinanzasRepository
 private fun String.num() = toDoubleOrNull() ?: 0.0
 
 @Composable
-fun TarjetasScreen(onAbrir: (Int) -> Unit, viewModel: TarjetasViewModel = hiltViewModel()) {
+fun TarjetasScreen(onAbrir: (Int) -> Unit, onNueva: () -> Unit, viewModel: TarjetasViewModel = hiltViewModel()) {
     val estado by viewModel.estado.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { if (estado.tarjetas.isNotEmpty()) viewModel.cargar() }
     when {
         estado.cargando -> Cargando()
         estado.error != null && estado.tarjetas.isEmpty() -> ErrorConReintento(estado.error!!, { viewModel.cargar() })
-        estado.tarjetas.isEmpty() -> Vacio("Aún no hay tarjetas. Créalas desde la web.")
+        estado.tarjetas.isEmpty() -> Column { Vacio("Aún no hay tarjetas."); TextButton(onClick = onNueva, modifier = Modifier.fillMaxWidth()) { Text("Agregar tarjeta") } }
         else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item {
-                Text("Tarjetas de crédito", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Tarjetas de crédito", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                    IconButton(onClick = onNueva) { Icon(Icons.Default.Add, contentDescription = "Nueva tarjeta") }
+                }
             }
             item {
                 val activas = estado.tarjetas.filter { it.activo }

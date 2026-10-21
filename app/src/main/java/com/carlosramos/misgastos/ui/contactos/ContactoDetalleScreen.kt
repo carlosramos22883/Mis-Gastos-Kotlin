@@ -216,7 +216,8 @@ class ContactoViewModel @Inject constructor(
     fun cambiarContacto(f: FormContacto) { _contacto.value = f }
     fun cerrarContacto() { _contacto.value = null }
 
-    fun guardarContacto(alCrear: (Int) -> Unit) {
+    /** Al crear, esta misma pantalla pasa a mostrar el contacto nuevo. */
+    fun guardarContacto() {
         val f = _contacto.value ?: return
         val errores = buildMap {
             if (f.nombre.isBlank()) put("nombre", "Escribe el nombre.")
@@ -232,7 +233,9 @@ class ContactoViewModel @Inject constructor(
             when (val r = repo.guardarContacto(f.id, body)) {
                 is Resultado.Ok -> {
                     _contacto.value = null
-                    if (f.id == null) alCrear(r.datos.id) else { avisar("Contacto actualizado."); cargar() }
+                    if (f.id == null) { id = r.datos.id; _estado.value = _estado.value.copy(cargando = true); avisar("Contacto creado.") } else avisar("Contacto actualizado.")
+                    cargar()
+                    cargarOrigenes()
                 }
                 is Resultado.Falla -> _contacto.value = f.copy(guardando = false, errores = r.campos, error = r.mensaje)
             }
@@ -242,7 +245,7 @@ class ContactoViewModel @Inject constructor(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ContactoDetalleScreen(onVolver: () -> Unit, onCreado: (Int) -> Unit, viewModel: ContactoViewModel = hiltViewModel()) {
+fun ContactoDetalleScreen(onVolver: () -> Unit, viewModel: ContactoViewModel = hiltViewModel()) {
     val estado by viewModel.estado.collectAsStateWithLifecycle()
     val deuda by viewModel.deuda.collectAsStateWithLifecycle()
     val formContacto by viewModel.formContacto.collectAsStateWithLifecycle()
@@ -349,7 +352,7 @@ fun ContactoDetalleScreen(onVolver: () -> Unit, onCreado: (Int) -> Unit, viewMod
         HojaFormulario(
             titulo = if (f.id == null) "Nuevo contacto" else "Editar contacto", accion = "Guardar", guardando = f.guardando,
             onCerrar = { viewModel.cerrarContacto(); if (f.id == null) onVolver() },
-            onAccion = { viewModel.guardarContacto(onCreado) }, error = f.error?.takeIf { f.errores.isEmpty() }
+            onAccion = viewModel::guardarContacto, error = f.error?.takeIf { f.errores.isEmpty() }
         ) {
             OutlinedTextField(value = f.nombre, onValueChange = { viewModel.cambiarContacto(f.copy(nombre = it)) }, label = { Text("Nombre") },
                 isError = f.errores["nombre"] != null, supportingText = f.errores["nombre"]?.let { { Text(it) } }, singleLine = true, modifier = Modifier.fillMaxWidth())

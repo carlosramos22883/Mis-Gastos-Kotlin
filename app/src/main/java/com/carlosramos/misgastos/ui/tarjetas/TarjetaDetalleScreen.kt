@@ -19,6 +19,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Lock
@@ -188,13 +189,14 @@ class TarjetaDetalleViewModel @Inject constructor(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TarjetaDetalleScreen(onVolver: () -> Unit, onAbrirCompromiso: (Int) -> Unit, viewModel: TarjetaDetalleViewModel = hiltViewModel()) {
+fun TarjetaDetalleScreen(onVolver: () -> Unit, onAbrirCompromiso: (Int) -> Unit, onEditar: (Int) -> Unit, viewModel: TarjetaDetalleViewModel = hiltViewModel()) {
     val estado by viewModel.estado.collectAsStateWithLifecycle()
     val form by viewModel.form.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     var avance by remember { mutableStateOf(false) }
     LaunchedEffect(estado.mensaje) { estado.mensaje?.let { snackbar.showSnackbar(it); viewModel.mensajeVisto() } }
     val d = estado.detalle
+    LaunchedEffect(Unit) { if (estado.detalle != null) viewModel.cargar() }
     val miembros = estado.comunes?.miembros.orEmpty().associate { it.id to it.nombre.substringBefore(" ") }
 
     Scaffold(
@@ -202,7 +204,8 @@ fun TarjetaDetalleScreen(onVolver: () -> Unit, onAbrirCompromiso: (Int) -> Unit,
         topBar = {
             TopAppBar(
                 title = { Text(d?.tarjeta?.nombre ?: "Tarjeta", maxLines = 1, overflow = TextOverflow.Ellipsis) }, windowInsets = WindowInsets(0),
-                navigationIcon = { IconButton(onClick = onVolver) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver") } }
+                navigationIcon = { IconButton(onClick = onVolver) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver") } },
+                actions = { if (d != null) IconButton(onClick = { onEditar(d.tarjeta.id) }) { Icon(Icons.Default.Edit, contentDescription = "Editar tarjeta") } }
             )
         },
         snackbarHost = { SnackbarHost(snackbar) },

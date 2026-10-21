@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -97,7 +98,7 @@ private fun String?.num() = this?.toDoubleOrNull() ?: 0.0
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PrestamosScreen(onAbrir: (Int) -> Unit, onVolver: () -> Unit, viewModel: PrestamosViewModel = hiltViewModel()) {
+fun PrestamosScreen(onAbrir: (Int) -> Unit, onNuevo: () -> Unit, onVolver: () -> Unit, viewModel: PrestamosViewModel = hiltViewModel()) {
     val estado by viewModel.estado.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { if (estado.prestamos.isNotEmpty()) viewModel.cargar() }
     Scaffold(
@@ -105,7 +106,8 @@ fun PrestamosScreen(onAbrir: (Int) -> Unit, onVolver: () -> Unit, viewModel: Pre
         topBar = {
             TopAppBar(
                 title = { Text("Préstamos") }, windowInsets = WindowInsets(0),
-                navigationIcon = { IconButton(onClick = onVolver) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver") } }
+                navigationIcon = { IconButton(onClick = onVolver) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver") } },
+                actions = { IconButton(onClick = onNuevo) { Icon(Icons.Default.Add, contentDescription = "Nuevo préstamo") } }
             )
         }
     ) { relleno ->

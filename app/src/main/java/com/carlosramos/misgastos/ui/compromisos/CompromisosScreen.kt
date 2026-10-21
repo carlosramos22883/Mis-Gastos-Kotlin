@@ -20,7 +20,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -118,11 +122,12 @@ fun colorEstado(estadoVisual: String): Color = when (estadoVisual) {
 }
 
 @Composable
-fun CompromisosScreen(onAbrir: (Int) -> Unit, viewModel: CompromisosViewModel = hiltViewModel()) {
+fun CompromisosScreen(onAbrir: (Int) -> Unit, onNuevo: () -> Unit, viewModel: CompromisosViewModel = hiltViewModel()) {
     val estado by viewModel.estado.collectAsStateWithLifecycle()
     // Al volver del detalle (quizá se pagó algo) se refresca la lista
     LaunchedEffect(Unit) { if (estado.lista.isNotEmpty()) viewModel.cargar() }
 
+    Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
             Text("Compromisos", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
@@ -155,6 +160,10 @@ fun CompromisosScreen(onAbrir: (Int) -> Unit, viewModel: CompromisosViewModel = 
                 }
             }
         }
+    }
+    FloatingActionButton(onClick = onNuevo, modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)) {
+        Icon(Icons.Default.Add, contentDescription = "Nuevo compromiso")
+    }
     }
 }
 
