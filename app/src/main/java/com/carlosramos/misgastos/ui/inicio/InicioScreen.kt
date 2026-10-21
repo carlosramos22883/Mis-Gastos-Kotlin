@@ -96,6 +96,8 @@ fun InicioScreen(
     onAbrirCompromiso: (Int) -> Unit,
     onVerEfectivo: () -> Unit,
     onVerCompromisos: () -> Unit,
+    onAbrirCuenta: (Int) -> Unit,
+    onAbrirTarjeta: (Int) -> Unit,
     viewModel: InicioViewModel = hiltViewModel()
 ) {
     val estado by viewModel.estado.collectAsStateWithLifecycle()
@@ -137,11 +139,11 @@ fun InicioScreen(
                         }
                     }
                 }
-                item { Tarjetas(d, estado.miembros) }
+                item { Tarjetas(d, estado.miembros, onAbrirTarjeta) }
                 item {
                     Seccion("Cuentas · ${Formato.dinero(d.totalCuentas)}") {
                         d.cuentas.forEach { c ->
-                            Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Row(Modifier.fillMaxWidth().clickable { onAbrirCuenta(c.id) }.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Avatar(c.banco?.logo, c.banco?.nombre ?: c.nombre, Formato.color(c.color), tamano = 32.dp, cuadrado = true)
                                 Spacer(Modifier.width(10.dp))
                                 Column(Modifier.weight(1f)) {
@@ -230,7 +232,7 @@ private fun FilaAlerta(a: Alerta) {
 
 /** El "cuadrito" de la hoja: cada tarjeta con su color, lo disponible y lo que hay que pagar. */
 @Composable
-private fun Tarjetas(d: Dashboard, miembros: Map<Int, String>) {
+private fun Tarjetas(d: Dashboard, miembros: Map<Int, String>, onAbrir: (Int) -> Unit) {
     val t = d.tarjetasTotales
     Seccion("Tarjetas de crédito") {
         FilaValor("Disponible", Formato.dinero(t.disponible), negrita = true)
@@ -238,17 +240,17 @@ private fun Tarjetas(d: Dashboard, miembros: Map<Int, String>) {
         FilaValor("Disponible para avances", Formato.dinero(t.disponibleAvances))
         Spacer(Modifier.height(8.dp))
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(d.tarjetas, key = { it.id }) { TarjetaChica(it, miembros[it.userId]) }
+            items(d.tarjetas, key = { it.id }) { TarjetaChica(it, miembros[it.userId]) { onAbrir(it.id) } }
         }
     }
 }
 
 @Composable
-private fun TarjetaChica(t: TarjetaResumen, titular: String?) {
+private fun TarjetaChica(t: TarjetaResumen, titular: String?, onClick: () -> Unit) {
     val fondo = Formato.color(t.color, MaterialTheme.colorScheme.secondary)
     val texto = Formato.textoSobre(fondo)
     Column(
-        Modifier.width(180.dp).clip(RoundedCornerShape(12.dp)).background(fondo).padding(12.dp)
+        Modifier.width(180.dp).clip(RoundedCornerShape(12.dp)).background(fondo).clickable(onClick = onClick).padding(12.dp)
     ) {
         Text(t.nombre, color = texto, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(titular ?: "", color = texto.copy(alpha = 0.85f), fontSize = 11.sp)

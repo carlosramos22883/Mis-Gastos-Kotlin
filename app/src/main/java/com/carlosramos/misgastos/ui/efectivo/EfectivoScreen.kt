@@ -48,6 +48,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -75,22 +76,28 @@ import com.carlosramos.misgastos.ui.common.CampoFecha
 import com.carlosramos.misgastos.ui.common.Cargando
 import com.carlosramos.misgastos.ui.common.Desplegable
 import com.carlosramos.misgastos.ui.common.ErrorConReintento
+import com.carlosramos.misgastos.ui.common.FormularioMovimiento
 import com.carlosramos.misgastos.ui.common.Formato
 import com.carlosramos.misgastos.ui.common.Semantica
 import com.carlosramos.misgastos.ui.common.Vacio
+import com.carlosramos.misgastos.ui.cuentas.TransferenciaSheet
 
 @Composable
 fun EfectivoScreen(viewModel: EfectivoViewModel = hiltViewModel()) {
     val estado by viewModel.estado.collectAsStateWithLifecycle()
     val form by viewModel.form.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
+    var transferir by remember { mutableStateOf(false) }
     LaunchedEffect(estado.mensaje) { estado.mensaje?.let { snackbar.showSnackbar(it); viewModel.mensajeVisto() } }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0),
         snackbarHost = { SnackbarHost(snackbar) },
         floatingActionButton = {
-            if (estado.ciclo?.esActual == true) FloatingActionButton(onClick = viewModel::nuevo) { Icon(Icons.Default.Add, contentDescription = "Registrar movimiento") }
+            if (estado.ciclo?.esActual == true) Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                SmallFloatingActionButton(onClick = { transferir = true }) { Icon(Icons.Default.SwapHoriz, contentDescription = "Transferir (retiro o depósito)") }
+                FloatingActionButton(onClick = viewModel::nuevo) { Icon(Icons.Default.Add, contentDescription = "Registrar movimiento") }
+            }
         }
     ) { relleno ->
         Column(Modifier.padding(relleno).fillMaxSize()) {
@@ -102,7 +109,17 @@ fun EfectivoScreen(viewModel: EfectivoViewModel = hiltViewModel()) {
             }
         }
     }
-    form?.let { f -> estado.comunes?.let { c -> FormularioEfectivo(f, c, estado.ciclo?.inicio, viewModel) } }
+    if (transferir) TransferenciaSheet(
+        onCerrar = { transferir = false }, onHecho = { transferir = false; viewModel.avisar("Transferencia registrada."); viewModel.cargar() }
+    )
+    form?.let { f ->
+        estado.comunes?.let { c ->
+            FormularioMovimiento(
+                f, c, estado.ciclo?.inicio, onCambiar = viewModel::cambiar, onGuardar = viewModel::guardar,
+                onEliminar = viewModel::eliminar, onCerrar = viewModel::cerrarForm
+            )
+        }
+    }
 }
 
 @Composable
@@ -198,69 +215,4 @@ private fun FilaMovimiento(m: MovimientoEfectivo, quien: String?, onClick: () ->
         )
     }
     HorizontalDivider(Modifier.padding(start = 64.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun FormularioEfectivo(f: FormEfectivo, comunes: Comunes, cicloInicio: String?, vm: EfectivoViewModel) {
-    var confirmarBorrar by remember { mutableStateOf(false) }
-    ModalBottomSheet(onDismissRequest = vm::cerrarForm, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-        Column(
-            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).imePadding().navigationBarsPadding(),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Text(if (f.id == null) "Nuevo movimiento" else "Editar movimiento", style = MaterialTheme.typography.titleLarge)
-            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                listOf("egreso" to "Egreso", "ingreso" to "Ingreso").forEachIndexed { i, (tipo, texto) ->
-                    SegmentedButton(
-                        selected = f.tipo == tipo,
-                        onClick = { vm.cambiar(f.copy(tipo = tipo, categoriaId = null)) },
-                        shape = SegmentedButtonDefaults.itemShape(i, 2)
-                    ) { Text(texto) }
-                }
-            }
-            OutlinedTextField(
-                value = f.descripcion, onValueChange = { vm.cambiar(f.copy(descripcion = it)) }, label = { Text("Descripción") },
-                isError = f.errores["descripcion"] != null, supportingText = f.errores["descripcion"]?.let { { Text(it) } },
-                modifier = Modifier.fillMaxWidth()
-            )
-            OutlinedTextField(
-                value = f.monto, onValueChange = { vm.cambiar(f.copy(monto = it.replace(',', '.').filter { c -> c.isDigit() || c == '.' })) },
-                label = { Text("Monto") }, prefix = { Text("$ ") }, singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                isError = f.errores["monto"] != null, supportingText = f.errores["monto"]?.let { { Text(it) } },
-                modifier = Modifier.fillMaxWidth()
-            )
-            CampoFecha("Fecha", f.fecha, { vm.cambiar(f.copy(fecha = it)) }, desde = cicloInicio, hasta = Formato.hoy(), error = f.errores["fecha"])
-            Desplegable(
-                "Categoría", comunes.categoriasDe(f.tipo).map { it.id to it.nombre }, f.categoriaId,
-                { vm.cambiar(f.copy(categoriaId = it)) }, error = f.errores["categoria_personal_id"]
-            )
-            if (comunes.miembros.size > 1) Desplegable(
-                "¿Quién lo hizo?", comunes.miembros.map { it.id to it.nombre }, f.userId, { vm.cambiar(f.copy(userId = it)) }, error = f.errores["user_id"]
-            )
-            Desplegable(
-                "¿Con quién? (opcional)",
-                listOf<Pair<Int?, String>>(null to "Nadie") + comunes.contactos.filter { it.activo || it.id == f.contactoId }.map { it.id to it.nombreCompleto },
-                f.contactoId, { vm.cambiar(f.copy(contactoId = it)) }, error = f.errores["contacto_id"]
-            )
-            f.error?.takeIf { f.errores.isEmpty() }?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
-                if (f.id != null) OutlinedButton(onClick = { confirmarBorrar = true }, enabled = !f.guardando) { Text("Eliminar", color = MaterialTheme.colorScheme.error) }
-                Spacer(Modifier.weight(1f))
-                TextButton(onClick = vm::cerrarForm) { Text("Cancelar") }
-                Button(onClick = vm::guardar, enabled = !f.guardando) {
-                    if (f.guardando) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) else Text("Guardar")
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-        }
-    }
-    if (confirmarBorrar) AlertDialog(
-        onDismissRequest = { confirmarBorrar = false },
-        title = { Text("¿Eliminar este movimiento?") },
-        text = { Text("${f.descripcion} · ${Formato.dinero(f.monto)}") },
-        confirmButton = { TextButton(onClick = { confirmarBorrar = false; vm.eliminar() }) { Text("Eliminar", color = MaterialTheme.colorScheme.error) } },
-        dismissButton = { TextButton(onClick = { confirmarBorrar = false }) { Text("Cancelar") } }
-    )
 }

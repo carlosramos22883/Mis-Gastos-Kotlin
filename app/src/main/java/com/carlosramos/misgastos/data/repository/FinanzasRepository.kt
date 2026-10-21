@@ -89,6 +89,22 @@ class FinanzasRepository @Inject constructor(
     suspend fun cancelarCompromiso(id: Int, serie: Boolean) =
         llamarSinCuerpo { api.cancelarCompromiso(id, if (serie) "serie" else "pago") }
 
+    suspend fun cuentas() = llamar { api.cuentas() }.datos()
+    suspend fun cuenta(id: Int, ciclo: String?, tipo: String?, pagina: Int) = llamar { api.cuenta(id, ciclo, tipo, pagina) }
+    suspend fun guardarMovimientoCuenta(cuentaId: Int, id: Int?, body: com.carlosramos.misgastos.data.remote.dto.MovimientoCuentaBody) =
+        llamar { if (id == null) api.crearMovimientoCuenta(cuentaId, body) else api.editarMovimientoCuenta(cuentaId, id, body) }.datos()
+    suspend fun eliminarMovimientoCuenta(cuentaId: Int, id: Int) = llamarSinCuerpo { api.eliminarMovimientoCuenta(cuentaId, id) }
+
+    suspend fun opcionesTransferencia() = llamar { api.opcionesTransferencia() }.datos()
+    suspend fun transferir(body: com.carlosramos.misgastos.data.remote.dto.TransferenciaBody) = llamarSinCuerpo { api.crearTransferencia(body) }
+    suspend fun eliminarTransferencia(id: Int) = llamarSinCuerpo { api.eliminarTransferencia(id) }
+
+    suspend fun tarjetas() = llamar { api.tarjetas() }.datos()
+    suspend fun tarjeta(id: Int) = llamar { api.tarjeta(id) }.datos()
+    suspend fun guardarMovimientoTarjeta(tarjetaId: Int, id: Int?, body: com.carlosramos.misgastos.data.remote.dto.MovimientoTarjetaBody) =
+        llamar { if (id == null) api.crearMovimientoTarjeta(tarjetaId, body) else api.editarMovimientoTarjeta(tarjetaId, id, body) }.datos()
+    suspend fun eliminarMovimientoTarjeta(tarjetaId: Int, id: Int) = llamarSinCuerpo { api.eliminarMovimientoTarjeta(tarjetaId, id) }
+
     private suspend fun <T> llamar(peticion: suspend () -> Response<T>): Resultado<T> = try {
         val respuesta = peticion()
         val cuerpo = respuesta.body()

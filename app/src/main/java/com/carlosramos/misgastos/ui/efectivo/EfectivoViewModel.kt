@@ -9,6 +9,7 @@ import com.carlosramos.misgastos.data.remote.dto.ResumenEfectivo
 import com.carlosramos.misgastos.data.repository.Comunes
 import com.carlosramos.misgastos.data.repository.FinanzasRepository
 import com.carlosramos.misgastos.data.repository.Resultado
+import com.carlosramos.misgastos.ui.common.FormMovimiento
 import com.carlosramos.misgastos.ui.common.Formato
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,27 +34,12 @@ data class EfectivoEstado(
     val mensaje: String? = null
 )
 
-/** Formulario de un movimiento (nuevo si id == null). */
-data class FormEfectivo(
-    val id: Int? = null,
-    val tipo: String = "egreso",
-    val descripcion: String = "",
-    val monto: String = "",
-    val fecha: String = Formato.hoy(),
-    val categoriaId: Int? = null,
-    val userId: Int? = null,
-    val contactoId: Int? = null,
-    val guardando: Boolean = false,
-    val errores: Map<String, String> = emptyMap(),
-    val error: String? = null
-)
-
 @HiltViewModel
 class EfectivoViewModel @Inject constructor(private val repo: FinanzasRepository) : ViewModel() {
     private val _estado = MutableStateFlow(EfectivoEstado())
     val estado = _estado.asStateFlow()
 
-    private val _form = MutableStateFlow<FormEfectivo?>(null)
+    private val _form = MutableStateFlow<FormMovimiento?>(null)
     val form = _form.asStateFlow()
 
     init {
@@ -94,11 +80,13 @@ class EfectivoViewModel @Inject constructor(private val repo: FinanzasRepository
 
     fun mensajeVisto() { _estado.value = _estado.value.copy(mensaje = null) }
 
+    fun avisar(texto: String) { _estado.value = _estado.value.copy(mensaje = texto) }
+
     // ----- Formulario -----
 
     fun nuevo() {
         val yo = _estado.value.comunes?.usuarioId
-        _form.value = FormEfectivo(userId = yo, fecha = minOf(Formato.hoy(), _estado.value.ciclo?.fin ?: Formato.hoy()))
+        _form.value = FormMovimiento(userId = yo, fecha = minOf(Formato.hoy(), _estado.value.ciclo?.fin ?: Formato.hoy()))
     }
 
     fun editar(m: MovimientoEfectivo) {
@@ -109,13 +97,13 @@ class EfectivoViewModel @Inject constructor(private val repo: FinanzasRepository
             )
             return
         }
-        _form.value = FormEfectivo(
+        _form.value = FormMovimiento(
             id = m.id, tipo = m.tipo, descripcion = m.descripcion, monto = m.monto, fecha = m.fecha,
             categoriaId = m.categoria?.id, userId = m.userId, contactoId = m.contacto?.id
         )
     }
 
-    fun cambiar(f: FormEfectivo) { _form.value = f }
+    fun cambiar(f: FormMovimiento) { _form.value = f }
 
     fun cerrarForm() { _form.value = null }
 

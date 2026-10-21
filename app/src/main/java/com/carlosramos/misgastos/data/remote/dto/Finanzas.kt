@@ -236,3 +236,178 @@ data class Contacto(
     @SerializedName("foto_url") val fotoUrl: String?,
     val activo: Boolean
 )
+
+// ---------- Cuentas (/api/cuentas) ----------
+
+data class TipoCuentaMini(val id: Int, val nombre: String)
+
+data class BancoLogo(val id: Int, val nombre: String, @SerializedName("logo_url") val logoUrl: String?)
+
+data class Cuenta(
+    val id: Int,
+    @SerializedName("user_id") val userId: Int?,
+    val nombre: String,
+    val color: String?,
+    @SerializedName("tipo_cuenta") val tipoCuenta: TipoCuentaMini?,
+    val banco: BancoLogo?,
+    @SerializedName("saldo_inicial") val saldoInicial: String,
+    @SerializedName("fecha_inicial") val fechaInicial: String?,
+    val saldo: String,
+    val activo: Boolean
+)
+
+data class TransferenciaMini(val id: Int, val origen: String, val destino: String, val eliminable: Boolean)
+
+data class MovimientoCuenta(
+    val id: Int,
+    @SerializedName("cuenta_id") val cuentaId: Int,
+    @SerializedName("user_id") val userId: Int?,
+    val contacto: ContactoMini?,
+    val descripcion: String,
+    val monto: String,
+    val fecha: String,
+    val tipo: String,
+    val categoria: CategoriaMini?,
+    @SerializedName("compromiso_id") val compromisoId: Int?,
+    val transferencia: TransferenciaMini?,
+    @SerializedName("gestionado_en") val gestionadoEn: String?,
+    val editable: Boolean
+)
+
+data class ResumenCuenta(
+    @SerializedName("saldo_inicial") val saldoInicial: String,
+    val ingresos: String,
+    val egresos: String,
+    @SerializedName("saldo_final") val saldoFinal: String
+)
+
+data class PaginaCuenta(
+    val data: List<MovimientoCuenta>,
+    val meta: MetaPagina,
+    val cuenta: Cuenta,
+    val ciclo: CicloEfectivo,
+    val resumen: ResumenCuenta
+)
+
+data class MovimientoCuentaBody(
+    val tipo: String,
+    val descripcion: String,
+    val monto: String,
+    val fecha: String,
+    @SerializedName("categoria_personal_id") val categoriaId: Int?,
+    @SerializedName("user_id") val userId: Int?,
+    @SerializedName("contacto_id") val contactoId: String?
+)
+
+// ---------- Transferencias (/api/transferencias) ----------
+
+data class OpcionTransferencia(val valor: String, val nombre: String, val saldo: String)
+
+data class OpcionesTransferencia(val origenes: List<OpcionTransferencia>, val destinos: List<OpcionTransferencia>)
+
+data class TransferenciaBody(
+    val origen: String,
+    val destino: String,
+    val monto: String,
+    val fecha: String,
+    val descripcion: String?,
+    @SerializedName("user_id") val userId: Int?
+)
+
+// ---------- Tarjetas (/api/tarjetas) ----------
+
+data class PorPagarTarjeta(@SerializedName("compromiso_id") val compromisoId: Int, val monto: String, val fecha: String?)
+
+data class Tarjeta(
+    val id: Int,
+    @SerializedName("user_id") val userId: Int?,
+    val nombre: String,
+    @SerializedName("ultimos_digitos") val ultimosDigitos: String?,
+    val color: String?,
+    @SerializedName("color_texto") val colorTexto: String?,
+    val banco: BancoLogo?,
+    val marca: BancoLogo?,
+    @SerializedName("limite_credito") val limite: String,
+    @SerializedName("tasa_interes") val tasaInteres: String?,
+    @SerializedName("permite_avances") val permiteAvances: Boolean,
+    @SerializedName("dia_corte") val diaCorte: Int,
+    @SerializedName("dia_pago") val diaPago: Int,
+    val deuda: String,
+    val disponible: String,
+    @SerializedName("proximo_corte") val proximoCorte: String?,
+    @SerializedName("por_pagar") val porPagar: PorPagarTarjeta?,
+    val activo: Boolean
+)
+
+data class MovimientoTarjeta(
+    val id: Int,
+    @SerializedName("tarjeta_id") val tarjetaId: Int,
+    @SerializedName("user_id") val userId: Int?,
+    val contacto: ContactoMini?,
+    val tipo: String,
+    @SerializedName("tipo_texto") val tipoTexto: String,
+    val descripcion: String,
+    val comentario: String?,
+    val monto: String,
+    val fecha: String,
+    val cuotas: Int?,
+    val categoria: CategoriaMini?,
+    @SerializedName("transferencia_id") val transferenciaId: Int?,
+    @SerializedName("gestionado_en") val gestionadoEn: String?,
+    val editable: Boolean
+)
+
+data class LineaPorFacturar(
+    @SerializedName("movimiento_id") val movimientoId: Int,
+    val descripcion: String,
+    val fecha: String,
+    @SerializedName("cuota_numero") val cuotaNumero: Int?,
+    val cuotas: Int?,
+    val monto: String
+)
+
+data class PorFacturar(val total: String, val lineas: List<LineaPorFacturar>)
+
+data class PeriodoAbierto(val desde: String, val corte: String?)
+
+data class EnCuotas(val movimiento: MovimientoTarjeta, @SerializedName("cuotas_cobradas") val cuotasCobradas: Int)
+
+data class EstadoCuenta(
+    val id: Int,
+    @SerializedName("fecha_corte") val fechaCorte: String,
+    @SerializedName("fecha_limite_pago") val fechaLimitePago: String?,
+    val total: String,
+    @SerializedName("compromiso_id") val compromisoId: Int?,
+    val estado: String?,
+    @SerializedName("saldo_pendiente") val saldoPendiente: String?
+)
+
+data class CostoNoPagar(
+    @SerializedName("interes_mes") val interesMes: Double,
+    val tasa: Double
+)
+
+data class PagoPendienteTarjeta(val compromiso: Compromiso, @SerializedName("costo_de_no_pagar") val costo: CostoNoPagar?)
+
+data class TarjetaDetalle(
+    val tarjeta: Tarjeta,
+    @SerializedName("periodo_abierto") val periodoAbierto: PeriodoAbierto,
+    @SerializedName("por_facturar") val porFacturar: PorFacturar,
+    val movimientos: List<MovimientoTarjeta>,
+    @SerializedName("en_cuotas") val enCuotas: List<EnCuotas>,
+    @SerializedName("estados_cuenta") val estadosCuenta: List<EstadoCuenta>,
+    @SerializedName("por_pagar") val porPagar: List<PagoPendienteTarjeta>
+)
+
+/** tipo: compra | cargo | credito (los avances van por transferencia). */
+data class MovimientoTarjetaBody(
+    val tipo: String,
+    val descripcion: String,
+    val monto: String,
+    val fecha: String,
+    val cuotas: Int?,
+    @SerializedName("categoria_personal_id") val categoriaId: Int?,
+    val comentario: String?,
+    @SerializedName("user_id") val userId: Int?,
+    @SerializedName("contacto_id") val contactoId: String?
+)

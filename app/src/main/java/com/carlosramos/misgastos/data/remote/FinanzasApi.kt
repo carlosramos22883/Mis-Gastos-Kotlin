@@ -1,6 +1,16 @@
 package com.carlosramos.misgastos.data.remote
 
 import com.carlosramos.misgastos.data.remote.dto.Categoria
+import com.carlosramos.misgastos.data.remote.dto.Cuenta
+import com.carlosramos.misgastos.data.remote.dto.MovimientoCuenta
+import com.carlosramos.misgastos.data.remote.dto.MovimientoCuentaBody
+import com.carlosramos.misgastos.data.remote.dto.MovimientoTarjeta
+import com.carlosramos.misgastos.data.remote.dto.MovimientoTarjetaBody
+import com.carlosramos.misgastos.data.remote.dto.OpcionesTransferencia
+import com.carlosramos.misgastos.data.remote.dto.PaginaCuenta
+import com.carlosramos.misgastos.data.remote.dto.Tarjeta
+import com.carlosramos.misgastos.data.remote.dto.TarjetaDetalle
+import com.carlosramos.misgastos.data.remote.dto.TransferenciaBody
 import com.carlosramos.misgastos.data.remote.dto.Compromiso
 import com.carlosramos.misgastos.data.remote.dto.Contacto
 import com.carlosramos.misgastos.data.remote.dto.Dashboard
@@ -79,4 +89,55 @@ interface FinanzasApi {
     /** alcance: pago (solo este) | serie (este y los siguientes de la regla) */
     @DELETE("compromisos/{id}")
     suspend fun cancelarCompromiso(@Path("id") id: Int, @Query("alcance") alcance: String): Response<Unit>
+
+    // ----- Cuentas -----
+
+    @GET("cuentas")
+    suspend fun cuentas(): Response<Envoltura<List<Cuenta>>>
+
+    @GET("cuentas/{id}")
+    suspend fun cuenta(
+        @Path("id") id: Int,
+        @Query("ciclo") ciclo: String?,
+        @Query("tipo") tipo: String?,
+        @Query("page") pagina: Int,
+        @Query("per_page") porPagina: Int = 30
+    ): Response<PaginaCuenta>
+
+    @POST("cuentas/{id}/movimientos")
+    suspend fun crearMovimientoCuenta(@Path("id") cuentaId: Int, @Body body: MovimientoCuentaBody): Response<Envoltura<MovimientoCuenta>>
+
+    @PUT("cuentas/{id}/movimientos/{mov}")
+    suspend fun editarMovimientoCuenta(@Path("id") cuentaId: Int, @Path("mov") id: Int, @Body body: MovimientoCuentaBody): Response<Envoltura<MovimientoCuenta>>
+
+    @DELETE("cuentas/{id}/movimientos/{mov}")
+    suspend fun eliminarMovimientoCuenta(@Path("id") cuentaId: Int, @Path("mov") id: Int): Response<Unit>
+
+    // ----- Transferencias -----
+
+    @GET("transferencias/opciones")
+    suspend fun opcionesTransferencia(): Response<Envoltura<OpcionesTransferencia>>
+
+    @POST("transferencias")
+    suspend fun crearTransferencia(@Body body: TransferenciaBody): Response<Unit>
+
+    @DELETE("transferencias/{id}")
+    suspend fun eliminarTransferencia(@Path("id") id: Int): Response<Unit>
+
+    // ----- Tarjetas -----
+
+    @GET("tarjetas")
+    suspend fun tarjetas(): Response<Envoltura<List<Tarjeta>>>
+
+    @GET("tarjetas/{id}")
+    suspend fun tarjeta(@Path("id") id: Int): Response<Envoltura<TarjetaDetalle>>
+
+    @POST("tarjetas/{id}/movimientos")
+    suspend fun crearMovimientoTarjeta(@Path("id") tarjetaId: Int, @Body body: MovimientoTarjetaBody): Response<Envoltura<MovimientoTarjeta>>
+
+    @PUT("tarjetas/{id}/movimientos/{mov}")
+    suspend fun editarMovimientoTarjeta(@Path("id") tarjetaId: Int, @Path("mov") id: Int, @Body body: MovimientoTarjetaBody): Response<Envoltura<MovimientoTarjeta>>
+
+    @DELETE("tarjetas/{id}/movimientos/{mov}")
+    suspend fun eliminarMovimientoTarjeta(@Path("id") tarjetaId: Int, @Path("mov") id: Int): Response<Unit>
 }

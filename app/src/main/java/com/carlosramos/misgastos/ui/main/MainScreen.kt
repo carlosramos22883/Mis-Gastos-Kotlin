@@ -13,7 +13,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.EventNote
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.AccountBalance
+import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material3.Icon
@@ -51,7 +55,11 @@ import com.carlosramos.misgastos.ui.common.FilaValor
 import com.carlosramos.misgastos.ui.common.Seccion
 import com.carlosramos.misgastos.ui.compromisos.CompromisoDetalleScreen
 import com.carlosramos.misgastos.ui.compromisos.CompromisosScreen
+import com.carlosramos.misgastos.ui.cuentas.CuentaDetalleScreen
+import com.carlosramos.misgastos.ui.cuentas.CuentasScreen
 import com.carlosramos.misgastos.ui.efectivo.EfectivoScreen
+import com.carlosramos.misgastos.ui.tarjetas.TarjetaDetalleScreen
+import com.carlosramos.misgastos.ui.tarjetas.TarjetasScreen
 import com.carlosramos.misgastos.ui.inicio.InicioScreen
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -74,6 +82,7 @@ private data class Pestana(val ruta: String, val texto: String, val icono: Image
 private val pestanas = listOf(
     Pestana("inicio", "Inicio", Icons.Default.Home),
     Pestana("efectivo", "Efectivo", Icons.Default.Payments),
+    Pestana("tarjetas", "Tarjetas", Icons.Default.CreditCard),
     Pestana("compromisos", "Compromisos", Icons.AutoMirrored.Filled.EventNote),
     Pestana("mas", "Más", Icons.Default.Menu)
 )
@@ -98,10 +107,11 @@ fun MainScreen(onCerrarSesion: () -> Unit, viewModel: MainViewModel = hiltViewMo
             NavigationBar {
                 pestanas.forEach { p ->
                     NavigationBarItem(
-                        selected = ruta == p.ruta || (p.ruta == "compromisos" && ruta.startsWith("compromiso/")),
+                        selected = ruta == p.ruta || (p.ruta == "compromisos" && ruta.startsWith("compromiso/")) ||
+                            (p.ruta == "tarjetas" && ruta.startsWith("tarjeta/")) || (p.ruta == "mas" && ruta.startsWith("cuenta")),
                         onClick = { ir(p.ruta) },
                         icon = { Icon(p.icono, contentDescription = null) },
-                        label = { Text(p.texto) }
+                        label = { Text(p.texto, maxLines = 1, softWrap = false, style = MaterialTheme.typography.labelSmall) }
                     )
                 }
             }
@@ -112,7 +122,9 @@ fun MainScreen(onCerrarSesion: () -> Unit, viewModel: MainViewModel = hiltViewMo
                 InicioScreen(
                     onAbrirCompromiso = { nav.navigate("compromiso/$it") },
                     onVerEfectivo = { ir("efectivo") },
-                    onVerCompromisos = { ir("compromisos") }
+                    onVerCompromisos = { ir("compromisos") },
+                    onAbrirCuenta = { nav.navigate("cuenta/$it") },
+                    onAbrirTarjeta = { nav.navigate("tarjeta/$it") }
                 )
             }
             composable("efectivo") { EfectivoScreen() }
@@ -120,13 +132,21 @@ fun MainScreen(onCerrarSesion: () -> Unit, viewModel: MainViewModel = hiltViewMo
             composable("compromiso/{id}", arguments = listOf(navArgument("id") { type = NavType.IntType })) {
                 CompromisoDetalleScreen(onVolver = { nav.popBackStack() })
             }
-            composable("mas") { MasScreen(viewModel, salir) }
+            composable("tarjetas") { TarjetasScreen(onAbrir = { nav.navigate("tarjeta/$it") }) }
+            composable("tarjeta/{id}", arguments = listOf(navArgument("id") { type = NavType.IntType })) {
+                TarjetaDetalleScreen(onVolver = { nav.popBackStack() }, onAbrirCompromiso = { nav.navigate("compromiso/$it") })
+            }
+            composable("cuentas") { CuentasScreen(onAbrir = { nav.navigate("cuenta/$it") }, onVolver = { nav.popBackStack() }) }
+            composable("cuenta/{id}", arguments = listOf(navArgument("id") { type = NavType.IntType })) {
+                CuentaDetalleScreen(onVolver = { nav.popBackStack() })
+            }
+            composable("mas") { MasScreen(viewModel, salir, onCuentas = { nav.navigate("cuentas") }) }
         }
     }
 }
 
 @Composable
-private fun MasScreen(viewModel: MainViewModel, onCerrarSesion: () -> Unit) {
+private fun MasScreen(viewModel: MainViewModel, onCerrarSesion: () -> Unit, onCuentas: () -> Unit) {
     val comunes by viewModel.comunes.collectAsStateWithLifecycle()
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         comunes?.let { c ->
@@ -145,10 +165,17 @@ private fun MasScreen(viewModel: MainViewModel, onCerrarSesion: () -> Unit) {
                 }
             }
         }
+        Seccion("Módulos") {
+            Row(Modifier.fillMaxWidth().clickable(onClick = onCuentas).padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.AccountBalance, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.width(12.dp))
+                Text("Cuentas y billeteras", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+            }
+        }
         Seccion("Próximamente en la app") {
             Text(
-                "Cuentas y billeteras, tarjetas de crédito, contactos y \"nos deben\", préstamos e ingresos. " +
-                    "Mientras tanto están en la web.",
+                "Contactos y \"nos deben\", préstamos e ingresos. Mientras tanto están en la web.",
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
