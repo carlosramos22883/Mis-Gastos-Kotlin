@@ -140,7 +140,7 @@ fun ContactosScreen(
 private fun FilaContacto(c: Contacto, onClick: () -> Unit) {
     val pendiente = c.pendiente?.toDoubleOrNull() ?: 0.0
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Avatar(c.fotoUrl, c.nombreCompleto, tamano = 44.dp)
+        Avatar(c.fotoUrl, c.nombreCompleto, tamano = 60.dp)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(c.nombreCompleto, style = MaterialTheme.typography.bodyLarge)
@@ -154,5 +154,5 @@ private fun FilaContacto(c: Contacto, onClick: () -> Unit) {
             Text(Formato.dinero(pendiente), color = Semantica.ingreso, fontWeight = FontWeight.SemiBold)
         }
     }
-    HorizontalDivider(Modifier.padding(start = 72.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+    HorizontalDivider(Modifier.padding(start = 88.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 }

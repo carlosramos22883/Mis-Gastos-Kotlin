@@ -60,7 +60,8 @@ data class TarjetasEstado(
     val cargando: Boolean = true,
     val error: String? = null,
     val tarjetas: List<Tarjeta> = emptyList(),
-    val miembros: Map<Int, String> = emptyMap()
+    val miembros: Map<Int, String> = emptyMap(),
+    val fotos: Map<Int, String?> = emptyMap()
 )
 
 @HiltViewModel
@@ -72,9 +73,10 @@ class TarjetasViewModel @Inject constructor(private val repo: FinanzasRepository
 
     fun cargar() = viewModelScope.launch {
         _estado.value = _estado.value.copy(error = null)
-        val miembros = (repo.comunes() as? Resultado.Ok)?.datos?.miembros.orEmpty().associate { it.id to it.nombre.substringBefore(" ") }
+        val lista = (repo.comunes() as? Resultado.Ok)?.datos?.miembros.orEmpty()
+        val miembros = lista.associate { it.id to it.nombre.substringBefore(" ") }
         _estado.value = when (val r = repo.tarjetas()) {
-            is Resultado.Ok -> TarjetasEstado(cargando = false, tarjetas = r.datos, miembros = miembros)
+            is Resultado.Ok -> TarjetasEstado(cargando = false, tarjetas = r.datos, miembros = miembros, fotos = lista.associate { it.id to Formato.urlAvatar(it.avatar) })
             is Resultado.Falla -> _estado.value.copy(cargando = false, error = r.mensaje)
         }
     }
@@ -105,14 +107,16 @@ fun TarjetasScreen(onAbrir: (Int) -> Unit, onNueva: () -> Unit, viewModel: Tarje
                     FilaValor("Por pagar (estados de cuenta)", Formato.dinero(activas.sumOf { it.porPagar?.monto?.num() ?: 0.0 }))
                 }
             }
-            items(estado.tarjetas, key = { it.id }) { t -> TarjetaVisual(t, estado.miembros[t.userId]) { onAbrir(t.id) } }
+            items(estado.tarjetas, key = { it.id }) { t ->
+                TarjetaVisual(t, estado.miembros[t.userId], foto = estado.fotos[t.userId], mostrarFoto = estado.miembros.size > 1) { onAbrir(t.id) }
+            }
         }
     }
 }
 
 /** La tarjeta con su color; el texto usa el color de contraste que calcula el servidor. */
 @Composable
-fun TarjetaVisual(t: Tarjeta, titular: String?, onClick: (() -> Unit)? = null) {
+fun TarjetaVisual(t: Tarjeta, titular: String?, foto: String? = null, mostrarFoto: Boolean = false, onClick: (() -> Unit)? = null) {
     val fondo = Formato.color(t.color, MaterialTheme.colorScheme.secondary)
     val texto = Formato.color(t.colorTexto, Formato.textoSobre(fondo))
     val uso = (t.deuda.num() / t.limite.num().coerceAtLeast(1.0)).toFloat().coerceIn(0f, 1f)
@@ -128,6 +132,13 @@ fun TarjetaVisual(t: Tarjeta, titular: String?, onClick: (() -> Unit)? = null) {
                 Text(listOfNotNull(titular, t.ultimosDigitos?.let { "•••• $it" }, if (!t.activo) "Inactiva" else null).joinToString(" · "), color = texto.copy(alpha = 0.85f), fontSize = 12.sp)
             }
             t.marca?.logoUrl?.let { Avatar(it, t.marca.nombre, Color.White, tamano = 28.dp, cuadrado = true) }
+            // Foto del titular en la esquina: distingue tarjetas parecidas de cada miembro
+            if (mostrarFoto && titular != null) {
+                Spacer(Modifier.width(8.dp))
+                Box(Modifier.clip(androidx.compose.foundation.shape.CircleShape).background(Color.White).padding(2.dp)) {
+                    Avatar(Formato.urlImagen(foto) ?: foto, titular, tamano = 34.dp)
+                }
+            }
         }
         Spacer(Modifier.height(14.dp))
         Text("Disponible", color = texto.copy(alpha = 0.85f), fontSize = 12.sp)

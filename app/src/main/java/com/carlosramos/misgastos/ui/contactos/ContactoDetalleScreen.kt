@@ -275,7 +275,7 @@ fun ContactoDetalleScreen(onVolver: () -> Unit, viewModel: ContactoViewModel = h
             c == null -> Cargando(Modifier.padding(relleno))
             else -> Column(Modifier.padding(relleno).fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Avatar(c.fotoUrl, c.nombreCompleto, tamano = 64.dp)
+                    Avatar(c.fotoUrl, c.nombreCompleto, tamano = 104.dp)
                     Spacer(Modifier.width(14.dp))
                     Column {
                         Text(c.nombreCompleto, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)

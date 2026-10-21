@@ -64,6 +64,13 @@ object Formato {
         return url.replace(Regex("^https?://(localhost|127\\.0\\.0\\.1)(:\\d+)?"), origen)
     }
 
+    /** Foto de un miembro del hogar: la API manda la ruta dentro de storage o una URL completa. */
+    fun urlAvatar(ruta: String?): String? = when {
+        ruta.isNullOrBlank() -> null
+        ruta.startsWith("http") -> urlImagen(ruta)
+        else -> Constants.BASE_URL.removeSuffix("/").removeSuffix("/api") + "/storage/" + ruta
+    }
+
     /** Valida un monto como lo hace el servidor: positivo, máximo dos decimales. */
     fun montoValido(texto: String): Boolean = Regex("^\\d+(\\.\\d{1,2})?$").matches(texto) && (texto.toDoubleOrNull() ?: 0.0) > 0
 }

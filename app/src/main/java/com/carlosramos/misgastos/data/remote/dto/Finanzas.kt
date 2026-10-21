@@ -226,6 +226,8 @@ data class Miembro(
     val id: Int,
     val nombre: String,
     val email: String,
+    /** Ruta en storage ("avatars/x.webp") o URL completa (Google) */
+    val avatar: String? = null,
     @SerializedName("es_administrador") val esAdministrador: Boolean
 )
 
