@@ -13,7 +13,7 @@ import com.carlosramos.misgastos.ui.auth.LoginScreen
 import com.carlosramos.misgastos.ui.auth.RegisterScreen
 import com.carlosramos.misgastos.ui.auth.ResetPasswordScreen
 import com.carlosramos.misgastos.ui.auth.ForgotPasswordScreen
-import com.carlosramos.misgastos.ui.dashboard.DashboardScreen
+import com.carlosramos.misgastos.ui.main.MainScreen
 
 @Composable
 fun AppNavHost(
@@ -62,20 +62,12 @@ fun AppNavHost(
         }
 
         composable(Screen.DASHBOARD) {
-            // Si el login/register fue exitoso, obtenemos el nombre del usuario
-            val userName = if (uiState is AuthUiState.Success) {
-                (uiState as AuthUiState.Success).user.name
-            } else {
-                "Usuario"
-            }
-
-            DashboardScreen(
-                userName = userName,
-                onLogoutClick = {
+            MainScreen(
+                onCerrarSesion = {
                     authViewModel.logout()
-                    // Limpiamos el backstack para que no pueda volver al login con el botón atrás
+                    // Limpiamos el backstack para que no pueda volver con el botón atrás
                     navController.navigate(Screen.LOGIN) {
-                        popUpTo(Screen.LOGIN) { inclusive = true }
+                        popUpTo(0) { inclusive = true }
                     }
                 }
             )

@@ -76,6 +76,9 @@ dependencies {
     ksp("com.google.dagger:hilt-compiler:2.51.1")
     implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
 
+    // Coil (logos de bancos y fotos de contactos, con el mismo cliente HTTP y su token)
+    implementation("io.coil-kt:coil-compose:2.7.0")
+
     // Retrofit + OkHttp (Networking)
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
     implementation("com.squareup.retrofit2:converter-gson:2.11.0")
