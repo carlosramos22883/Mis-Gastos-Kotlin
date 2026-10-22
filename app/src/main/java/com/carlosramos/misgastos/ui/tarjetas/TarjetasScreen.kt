@@ -61,7 +61,14 @@ data class TarjetasEstado(
     val error: String? = null,
     val tarjetas: List<Tarjeta> = emptyList(),
     val miembros: Map<Int, String> = emptyMap(),
-    val fotos: Map<Int, String?> = emptyMap()
+    val fotos: Map<Int, String?> = emptyMap(),
+    val orden: String = "nombre"
+)
+
+/** Formas de ordenar (las mismas de la web). */
+val ORDENES_TARJETA = listOf(
+    "disponible" to "Más disponible", "deuda" to "Más endeudada", "uso" to "Más usada (% del límite)",
+    "corte" to "Corte más próximo", "pago" to "Pago más próximo", "limite" to "Límite más alto", "nombre" to "Nombre"
 )
 
 @HiltViewModel
@@ -76,13 +83,30 @@ class TarjetasViewModel @Inject constructor(private val repo: FinanzasRepository
         val lista = (repo.comunes() as? Resultado.Ok)?.datos?.miembros.orEmpty()
         val miembros = lista.associate { it.id to it.nombre.substringBefore(" ") }
         _estado.value = when (val r = repo.tarjetas()) {
-            is Resultado.Ok -> TarjetasEstado(cargando = false, tarjetas = r.datos, miembros = miembros, fotos = lista.associate { it.id to Formato.urlAvatar(it.avatar) })
+            is Resultado.Ok -> TarjetasEstado(cargando = false, tarjetas = r.datos, miembros = miembros, fotos = lista.associate { it.id to Formato.urlAvatar(it.avatar) }, orden = _estado.value.orden)
             is Resultado.Falla -> _estado.value.copy(cargando = false, error = r.mensaje)
         }
     }
+
+    fun ordenar(orden: String) { _estado.value = _estado.value.copy(orden = orden) }
 }
 
 private fun String.num() = toDoubleOrNull() ?: 0.0
+
+/** Activas primero; dentro, según el orden elegido; empata por nombre. */
+private fun List<Tarjeta>.ordenadas(orden: String): List<Tarjeta> = sortedWith(
+    compareBy<Tarjeta> { !it.activo }.then(
+        when (orden) {
+            "disponible" -> compareByDescending { it.disponible.num() }
+            "deuda" -> compareByDescending { it.deuda.num() }
+            "uso" -> compareByDescending { it.deuda.num() / it.limite.num().coerceAtLeast(1.0) }
+            "corte" -> compareBy { it.proximoCorte ?: "9999" }
+            "pago" -> compareBy { it.porPagar?.fecha ?: "9999" }
+            "limite" -> compareByDescending { it.limite.num() }
+            else -> compareBy { it.nombre.lowercase() }
+        }
+    ).thenBy { it.nombre.lowercase() }
+)
 
 @Composable
 fun TarjetasScreen(onAbrir: (Int) -> Unit, onNueva: () -> Unit, viewModel: TarjetasViewModel = hiltViewModel()) {
@@ -107,7 +131,10 @@ fun TarjetasScreen(onAbrir: (Int) -> Unit, onNueva: () -> Unit, viewModel: Tarje
                     FilaValor("Por pagar (estados de cuenta)", Formato.dinero(activas.sumOf { it.porPagar?.monto?.num() ?: 0.0 }))
                 }
             }
-            items(estado.tarjetas, key = { it.id }) { t ->
+            item {
+                com.carlosramos.misgastos.ui.common.Desplegable("Ordenar por", ORDENES_TARJETA, estado.orden, viewModel::ordenar)
+            }
+            items(estado.tarjetas.ordenadas(estado.orden), key = { it.id }) { t ->
                 TarjetaVisual(t, estado.miembros[t.userId], foto = estado.fotos[t.userId], mostrarFoto = estado.miembros.size > 1) { onAbrir(t.id) }
             }
         }

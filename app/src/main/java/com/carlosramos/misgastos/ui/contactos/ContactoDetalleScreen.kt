@@ -1,6 +1,14 @@
 package com.carlosramos.misgastos.ui.contactos
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.ui.platform.LocalContext
+import com.carlosramos.misgastos.ui.common.Imagen
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -112,6 +120,7 @@ data class ContactoEstado(
     /** "efectivo", "cuenta:42", "tarjeta:7" → nombre con saldo */
     val origenes: List<Pair<String, String>> = emptyList(),
     val tipos: List<TipoSimple> = emptyList(),
+    val subiendoFoto: Boolean = false,
     val mensaje: String? = null
 )
 
@@ -203,6 +212,20 @@ class ContactoViewModel @Inject constructor(
         }
     }
 
+    // ----- Foto -----
+
+    fun foto(jpeg: ByteArray?) {
+        val c = _estado.value.contacto ?: return
+        if (jpeg == null) { avisar("No se pudo leer la foto."); return }
+        _estado.value = _estado.value.copy(subiendoFoto = true)
+        viewModelScope.launch {
+            when (val r = repo.fotoContacto(c, jpeg)) {
+                is Resultado.Ok -> { _estado.value = _estado.value.copy(subiendoFoto = false); avisar("Foto actualizada."); cargar() }
+                is Resultado.Falla -> { _estado.value = _estado.value.copy(subiendoFoto = false); avisar(r.mensaje) }
+            }
+        }
+    }
+
     // ----- Datos del contacto -----
 
     fun editarContacto() {
@@ -257,6 +280,10 @@ fun ContactoDetalleScreen(onVolver: () -> Unit, viewModel: ContactoViewModel = h
     val miembros = estado.comunes?.miembros.orEmpty().associate { it.id to it.nombre.substringBefore(" ") }
     // Para el historial, el nombre sin el saldo actual
     val cajas = estado.origenes.associate { (k, v) -> k to v.substringBefore(" (") }
+    val contexto = LocalContext.current
+    val elegirFoto = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        uri?.let { viewModel.foto(Imagen.paraSubir(contexto, it)) }
+    }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0),
@@ -275,7 +302,11 @@ fun ContactoDetalleScreen(onVolver: () -> Unit, viewModel: ContactoViewModel = h
             c == null -> Cargando(Modifier.padding(relleno))
             else -> Column(Modifier.padding(relleno).fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Avatar(c.fotoUrl, c.nombreCompleto, tamano = 104.dp)
+                    // Tocar la foto para cambiarla (se recorta en cuadrado de 512 px, como en la web)
+                    Box(Modifier.clickable(enabled = !estado.subiendoFoto) { elegirFoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
+                        Avatar(c.fotoUrl, c.nombreCompleto, tamano = 104.dp)
+                        if (estado.subiendoFoto) CircularProgressIndicator(Modifier.size(104.dp))
+                    }
                     Spacer(Modifier.width(14.dp))
                     Column {
                         Text(c.nombreCompleto, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
@@ -366,7 +397,7 @@ fun ContactoDetalleScreen(onVolver: () -> Unit, viewModel: ContactoViewModel = h
                 Text("Activo", modifier = Modifier.weight(1f))
                 Switch(checked = f.activo, onCheckedChange = { viewModel.cambiarContacto(f.copy(activo = it)) })
             }
-            Text("La foto se cambia desde la web por ahora.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (f.id != null) Text("Para cambiar la foto, tócala en la ficha del contacto.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 

@@ -76,6 +76,9 @@ dependencies {
     ksp("com.google.dagger:hilt-compiler:2.51.1")
     implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
 
+    // Orientación de las fotos elegidas (EXIF)
+    implementation("androidx.exifinterface:exifinterface:1.3.7")
+
     // Coil (logos de bancos y fotos de contactos, con el mismo cliente HTTP y su token)
     implementation("io.coil-kt:coil-compose:2.7.0")
 

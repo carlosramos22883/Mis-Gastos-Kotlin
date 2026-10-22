@@ -10,6 +10,8 @@ import com.google.gson.Gson
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import retrofit2.Response
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -25,6 +27,7 @@ data class Comunes(
     val usuarioId: Int,
     val nombre: String,
     val email: String,
+    val avatar: String? = null,
     val hogar: com.carlosramos.misgastos.data.remote.dto.Hogar?,
     val categorias: List<com.carlosramos.misgastos.data.remote.dto.Categoria>,
     val contactos: List<com.carlosramos.misgastos.data.remote.dto.Contacto>
@@ -62,7 +65,7 @@ class FinanzasRepository @Inject constructor(
         val u = (usuario as Resultado.Ok).datos
         return Resultado.Ok(
             Comunes(
-                usuarioId = u.id, nombre = u.name, email = u.email,
+                usuarioId = u.id, nombre = u.name, email = u.email, avatar = u.avatar,
                 hogar = (hogar as? Resultado.Ok)?.datos,
                 categorias = (categorias as Resultado.Ok).datos,
                 contactos = (contactos as? Resultado.Ok)?.datos.orEmpty()
@@ -86,6 +89,7 @@ class FinanzasRepository @Inject constructor(
     suspend fun compromisos(periodo: String, estado: String?, pagina: Int) = llamar { api.compromisos(periodo, estado, pagina) }
     suspend fun compromiso(id: Int) = llamar { api.compromiso(id) }.datos()
     suspend fun crearCompromiso(body: com.carlosramos.misgastos.data.remote.dto.CompromisoBody) = llamarSinCuerpo { api.crearCompromiso(body) }
+    suspend fun editarSerie(id: Int, body: com.carlosramos.misgastos.data.remote.dto.CompromisoBody) = llamar { api.editarSerie(id, body) }.datos()
     suspend fun editarCompromiso(id: Int, body: com.carlosramos.misgastos.data.remote.dto.CompromisoBody) = llamar { api.editarCompromiso(id, body) }.datos()
     suspend fun origenesPago(id: Int) = llamar { api.origenesPago(id) }.datos()
     suspend fun pagarCompromiso(id: Int, body: PagoCompromisoBody) = llamar { api.pagarCompromiso(id, body) }.datos()
@@ -146,6 +150,35 @@ class FinanzasRepository @Inject constructor(
     suspend fun guardarFuente(id: Int?, b: com.carlosramos.misgastos.data.remote.dto.FuenteBody) =
         llamar { if (id == null) api.crearFuente(b) else api.editarFuente(id, b) }.datos()
     suspend fun eliminarFuente(id: Int) = llamarSinCuerpo { api.eliminarFuente(id) }
+
+    suspend fun actualizarPerfil(nombre: String, email: String) =
+        llamar { api.actualizarPerfil(com.carlosramos.misgastos.data.remote.dto.PerfilBody(nombre, email)) }.also { if (it is Resultado.Ok) olvidar() }
+
+    suspend fun subirAvatar(jpeg: ByteArray) = llamar {
+        api.subirAvatar(texto("PATCH"), okhttp3.MultipartBody.Part.createFormData("avatar", "avatar.jpg", jpeg.toRequestBody("image/jpeg".toMediaType())))
+    }.also { if (it is Resultado.Ok) olvidar() }
+
+    /** Cambia la foto de un contacto conservando sus datos. */
+    suspend fun fotoContacto(c: com.carlosramos.misgastos.data.remote.dto.Contacto, jpeg: ByteArray): Resultado<com.carlosramos.misgastos.data.remote.dto.Contacto> {
+        val campos = buildMap {
+            put("_method", texto("PUT"))
+            put("nombre", texto(c.nombre ?: c.nombreCompleto))
+            c.apellido?.let { put("apellido", texto(it)) }
+            c.tipoContactoId?.let { put("tipo_contacto_id", texto(it.toString())) }
+            c.telefono?.let { put("telefono", texto(it)) }
+            c.email?.let { put("email", texto(it)) }
+            c.notas?.let { put("notas", texto(it)) }
+            put("activo", texto(if (c.activo) "1" else "0"))
+        }
+        return llamar { api.fotoContacto(c.id, campos, okhttp3.MultipartBody.Part.createFormData("foto", "foto.jpg", jpeg.toRequestBody("image/jpeg".toMediaType()))) }.datos()
+            .also { if (it is Resultado.Ok) olvidar() }
+    }
+
+    suspend fun guardarCategoria(id: Int?, b: com.carlosramos.misgastos.data.remote.dto.CategoriaBody) =
+        llamar { if (id == null) api.crearCategoria(b) else api.editarCategoria(id, b) }.datos().also { if (it is Resultado.Ok) olvidar() }
+    suspend fun eliminarCategoria(id: Int) = llamarSinCuerpo { api.eliminarCategoria(id) }.also { if (it is Resultado.Ok) olvidar() }
+
+    private fun texto(valor: String) = valor.toRequestBody("text/plain".toMediaType())
 
     private suspend fun <T> llamar(peticion: suspend () -> Response<T>): Resultado<T> = try {
         val respuesta = peticion()

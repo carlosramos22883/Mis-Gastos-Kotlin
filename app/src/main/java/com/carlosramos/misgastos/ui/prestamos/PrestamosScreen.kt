@@ -47,6 +47,7 @@ import androidx.lifecycle.viewModelScope
 import com.carlosramos.misgastos.data.remote.dto.Prestamo
 import com.carlosramos.misgastos.data.repository.FinanzasRepository
 import com.carlosramos.misgastos.data.repository.Resultado
+import com.carlosramos.misgastos.ui.common.Avatar
 import com.carlosramos.misgastos.ui.common.Cargando
 import com.carlosramos.misgastos.ui.common.ErrorConReintento
 import com.carlosramos.misgastos.ui.common.FilaValor
@@ -138,6 +139,10 @@ private fun TarjetaPrestamo(p: Prestamo, titular: String?, onClick: () -> Unit) 
             Box(Modifier.width(6.dp).height(150.dp).background(color))
             Column(Modifier.padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Con banco: su logo; con una persona: la foto del contacto
+                    if (p.banco == null && p.contacto != null) Avatar(p.contacto.fotoUrl, p.contacto.nombre, tamano = 40.dp)
+                    else Avatar(p.banco?.logoUrl, p.banco?.nombre ?: p.nombre, color, tamano = 40.dp, cuadrado = true)
+                    Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text(p.nombre, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                         Text(listOfNotNull(p.acreedor, p.tipo, titular).joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

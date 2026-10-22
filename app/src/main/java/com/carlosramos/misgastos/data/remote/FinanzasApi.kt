@@ -1,6 +1,10 @@
 package com.carlosramos.misgastos.data.remote
 
+import com.carlosramos.misgastos.data.remote.dto.AvatarRespuesta
 import com.carlosramos.misgastos.data.remote.dto.Catalogos
+import com.carlosramos.misgastos.data.remote.dto.CategoriaBody
+import com.carlosramos.misgastos.data.remote.dto.PerfilBody
+import com.carlosramos.misgastos.data.remote.dto.PerfilRespuesta
 import com.carlosramos.misgastos.data.remote.dto.CuentaBody
 import com.carlosramos.misgastos.data.remote.dto.FuenteBody
 import com.carlosramos.misgastos.data.remote.dto.PrestamoBody
@@ -36,7 +40,13 @@ import com.carlosramos.misgastos.data.remote.dto.MovimientoEfectivoBody
 import com.carlosramos.misgastos.data.remote.dto.PagoCompromisoBody
 import com.carlosramos.misgastos.data.remote.dto.PaginaCompromisos
 import com.carlosramos.misgastos.data.remote.dto.PaginaEfectivo
+import okhttp3.MultipartBody
+import okhttp3.RequestBody
 import retrofit2.Response
+import retrofit2.http.Multipart
+import retrofit2.http.PATCH
+import retrofit2.http.Part
+import retrofit2.http.PartMap
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
@@ -98,6 +108,10 @@ interface FinanzasApi {
     /** Responde el primer pago generado; en recurrentes además recurrente_id y pagos_generados. */
     @POST("compromisos")
     suspend fun crearCompromiso(@Body body: CompromisoBody): Response<Unit>
+
+    /** Edita la regla de la serie de este pago (se aplica a los pagos futuros sin abonos). */
+    @PUT("compromisos/{id}/serie")
+    suspend fun editarSerie(@Path("id") id: Int, @Body body: CompromisoBody): Response<Envoltura<Compromiso>>
 
     @PUT("compromisos/{id}")
     suspend fun editarCompromiso(@Path("id") id: Int, @Body body: CompromisoBody): Response<Envoltura<Compromiso>>
@@ -247,4 +261,26 @@ interface FinanzasApi {
     @POST("ingresos") suspend fun crearFuente(@Body body: FuenteBody): Response<Envoltura<FuenteIngreso>>
     @PUT("ingresos/{id}") suspend fun editarFuente(@Path("id") id: Int, @Body body: FuenteBody): Response<Envoltura<FuenteIngreso>>
     @DELETE("ingresos/{id}") suspend fun eliminarFuente(@Path("id") id: Int): Response<Unit>
+
+    // ----- Perfil -----
+
+    @PATCH("profile")
+    suspend fun actualizarPerfil(@Body body: PerfilBody): Response<PerfilRespuesta>
+
+    /** PHP no lee archivos en PATCH: va como POST con _method=PATCH. */
+    @Multipart
+    @POST("profile/avatar")
+    suspend fun subirAvatar(@Part("_method") metodo: RequestBody, @Part avatar: MultipartBody.Part): Response<AvatarRespuesta>
+
+    // ----- Foto de un contacto (POST con _method=PUT y todos sus datos, porque el formulario los exige) -----
+
+    @Multipart
+    @POST("contactos/{id}")
+    suspend fun fotoContacto(@Path("id") id: Int, @PartMap campos: Map<String, @JvmSuppressWildcards RequestBody>, @Part foto: MultipartBody.Part): Response<Envoltura<Contacto>>
+
+    // ----- Categorías -----
+
+    @POST("categorias") suspend fun crearCategoria(@Body body: CategoriaBody): Response<Envoltura<Categoria>>
+    @PUT("categorias/{id}") suspend fun editarCategoria(@Path("id") id: Int, @Body body: CategoriaBody): Response<Envoltura<Categoria>>
+    @DELETE("categorias/{id}") suspend fun eliminarCategoria(@Path("id") id: Int): Response<Unit>
 }

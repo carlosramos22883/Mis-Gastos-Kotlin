@@ -3,5 +3,7 @@ package com.carlosramos.misgastos.data.remote.dto
 data class UserResponse(
     val id: Int,
     val name: String,
-    val email: String
+    val email: String,
+    /** Ruta en storage ("avatars/x.webp") o URL de Google */
+    val avatar: String? = null
 )

@@ -14,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.EventNote
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.AccountBalance
+import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.RequestQuote
 import androidx.compose.material.icons.filled.Savings
@@ -30,6 +31,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -53,7 +55,10 @@ import com.carlosramos.misgastos.data.repository.Comunes
 import com.carlosramos.misgastos.data.repository.FinanzasRepository
 import com.carlosramos.misgastos.data.repository.Resultado
 import com.carlosramos.misgastos.data.repository.Sesion
+import com.carlosramos.misgastos.ui.ajustes.CategoriasScreen
+import com.carlosramos.misgastos.ui.ajustes.PerfilScreen
 import com.carlosramos.misgastos.ui.common.Avatar
+import com.carlosramos.misgastos.ui.common.Formato
 import com.carlosramos.misgastos.ui.common.FilaValor
 import com.carlosramos.misgastos.ui.common.Seccion
 import com.carlosramos.misgastos.ui.altas.CuentaFormScreen
@@ -86,7 +91,10 @@ class MainViewModel @Inject constructor(private val repo: FinanzasRepository, va
     private val _comunes = MutableStateFlow<Comunes?>(null)
     val comunes = _comunes.asStateFlow()
 
-    init { viewModelScope.launch { (repo.comunes() as? Resultado.Ok)?.let { _comunes.value = it.datos } } }
+    init { recargar() }
+
+    /** Al volver a "Más" (quizá se cambió el perfil o la foto). */
+    fun recargar() = viewModelScope.launch { (repo.comunes() as? Resultado.Ok)?.let { _comunes.value = it.datos } }
 
     fun olvidar() = repo.olvidar()
 }
@@ -123,7 +131,7 @@ fun MainScreen(onCerrarSesion: () -> Unit, viewModel: MainViewModel = hiltViewMo
                     NavigationBarItem(
                         selected = ruta == p.ruta || (p.ruta == "compromisos" && ruta.startsWith("compromiso")) ||
                             (p.ruta == "tarjetas" && ruta.startsWith("tarjeta")) ||
-                            (p.ruta == "mas" && listOf("cuenta", "contacto", "prestamo", "ingreso", "fuente").any { ruta.startsWith(it) }),
+                            (p.ruta == "mas" && listOf("cuenta", "contacto", "prestamo", "ingreso", "fuente", "perfil", "categorias").any { ruta.startsWith(it) }),
                         onClick = { ir(p.ruta) },
                         icon = { Icon(p.icono, contentDescription = null) },
                         label = { Text(p.texto, maxLines = 1, softWrap = false, style = MaterialTheme.typography.labelSmall) }
@@ -146,11 +154,11 @@ fun MainScreen(onCerrarSesion: () -> Unit, viewModel: MainViewModel = hiltViewMo
             }
             composable("efectivo") { EfectivoScreen() }
             composable("compromisos") { CompromisosScreen(onAbrir = { nav.navigate("compromiso/$it") }, onNuevo = { nav.navigate("compromiso-form/0") }) }
-            composable("compromiso-form/{id}", arguments = listOf(navArgument("id") { type = NavType.IntType })) {
+            composable("compromiso-form/{id}?serie={serie}", arguments = listOf(navArgument("id") { type = NavType.IntType }, navArgument("serie") { type = NavType.BoolType; defaultValue = false })) {
                 CompromisoFormScreen(onListo = { nav.popBackStack() }, onVolver = { nav.popBackStack() })
             }
             composable("compromiso/{id}", arguments = listOf(navArgument("id") { type = NavType.IntType })) {
-                CompromisoDetalleScreen(onVolver = { nav.popBackStack() }, onEditar = { nav.navigate("compromiso-form/$it") })
+                CompromisoDetalleScreen(onVolver = { nav.popBackStack() }, onEditar = { nav.navigate("compromiso-form/$it") }, onEditarSerie = { nav.navigate("compromiso-form/$it?serie=true") })
             }
             composable("tarjetas") { TarjetasScreen(onAbrir = { nav.navigate("tarjeta/$it") }, onNueva = { nav.navigate("tarjeta-form/0") }) }
             composable("tarjeta/{id}", arguments = listOf(navArgument("id") { type = NavType.IntType })) {
@@ -180,6 +188,8 @@ fun MainScreen(onCerrarSesion: () -> Unit, viewModel: MainViewModel = hiltViewMo
             composable("tarjeta-form/{id}", arguments = conId) { TarjetaFormScreen(alTerminar("tarjetas"), { nav.popBackStack() }) }
             composable("prestamo-form/{id}", arguments = conId) { PrestamoFormScreen(alTerminar("prestamos"), { nav.popBackStack() }) }
             composable("fuente-form/{id}", arguments = conId) { FuenteFormScreen(alTerminar("ingresos"), { nav.popBackStack() }) }
+            composable("perfil") { PerfilScreen(onListo = { nav.popBackStack() }, onVolver = { nav.popBackStack() }) }
+            composable("categorias") { CategoriasScreen(onVolver = { nav.popBackStack() }) }
             composable("mas") { MasScreen(viewModel, salir, ir = { nav.navigate(it) }) }
         }
     }
@@ -188,15 +198,17 @@ fun MainScreen(onCerrarSesion: () -> Unit, viewModel: MainViewModel = hiltViewMo
 @Composable
 private fun MasScreen(viewModel: MainViewModel, onCerrarSesion: () -> Unit, ir: (String) -> Unit) {
     val comunes by viewModel.comunes.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { viewModel.recargar() }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         comunes?.let { c ->
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Avatar(null, c.nombre, tamano = 48.dp)
+                Avatar(Formato.urlAvatar(c.avatar), c.nombre, tamano = 56.dp)
                 Spacer(Modifier.width(12.dp))
-                Column {
+                Column(Modifier.weight(1f)) {
                     Text(c.nombre, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Text(c.email, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+                TextButton(onClick = { ir("perfil") }) { Text("Mi perfil") }
             }
             c.hogar?.let { h ->
                 Seccion(h.nombre) {
@@ -210,7 +222,8 @@ private fun MasScreen(viewModel: MainViewModel, onCerrarSesion: () -> Unit, ir: 
                 Triple("cuentas", "Cuentas y billeteras", Icons.Default.AccountBalance),
                 Triple("contactos", "Contactos y \"nos deben\"", Icons.Default.People),
                 Triple("prestamos", "Préstamos", Icons.Default.RequestQuote),
-                Triple("ingresos", "Ingresos", Icons.Default.Savings)
+                Triple("ingresos", "Ingresos", Icons.Default.Savings),
+                Triple("categorias", "Categorías", Icons.Default.Category)
             ).forEach { (ruta, texto, icono) ->
                 Row(Modifier.fillMaxWidth().clickable { ir(ruta) }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(icono, contentDescription = null, tint = MaterialTheme.colorScheme.primary)

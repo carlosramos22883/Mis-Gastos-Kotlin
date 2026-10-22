@@ -237,7 +237,9 @@ fun TarjetaDetalleScreen(onVolver: () -> Unit, onAbrirCompromiso: (Int) -> Unit,
                 }
                 item {
                     Seccion("Próximo corte · ${Formato.fechaCorta(d.periodoAbierto.corte)}") {
-                        FilaValor("Lleva acumulado", Formato.dinero(d.porFacturar.total), negrita = true)
+                        val cargos = d.cargosProximoCorte.toDoubleOrNull() ?: 0.0
+                        FilaValor("Lleva acumulado", Formato.dinero((d.porFacturar.total.toDoubleOrNull() ?: 0.0) + cargos), negrita = true)
+                        if (cargos > 0) Text("Incluye ${Formato.dinero(cargos)} de cargos fijos que se suman al cortar.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         d.porFacturar.lineas.filter { it.cuotaNumero != null }.forEach {
                             FilaValor("${it.descripcion} (cuota ${it.cuotaNumero}/${it.cuotas})", Formato.dinero(it.monto))
                         }
@@ -255,6 +257,31 @@ fun TarjetaDetalleScreen(onVolver: () -> Unit, onAbrirCompromiso: (Int) -> Unit,
                             val m = e.movimiento
                             val cuota = (m.monto.toDoubleOrNull() ?: 0.0) / (m.cuotas ?: 1)
                             FilaValor("${m.descripcion} · ${e.cuotasCobradas}/${m.cuotas} cobradas", "${Formato.dinero(cuota)}/mes")
+                        }
+                    }
+                }
+                if (d.cargosFijos.isNotEmpty()) item {
+                    Seccion("Cargos fijos") {
+                        d.cargosFijos.forEach { c ->
+                            FilaValor("${c.descripcion}${if (c.activo) "" else " (inactivo)"} · cada corte", Formato.dinero(c.monto))
+                        }
+                        Text("Se agregan solos a cada estado de cuenta. Se administran desde la web.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                item {
+                    Seccion("Pagos realizados") {
+                        if (d.pagos.isEmpty()) Text("Aún no hay pagos registrados a esta tarjeta.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        d.pagos.forEach { p ->
+                            Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(p.descripcion, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(
+                                        "${Formato.fechaCorta(p.fecha)} · desde ${p.desde}" + (miembros[p.userId]?.let { " · $it" } ?: ""),
+                                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Text(Formato.dinero(p.monto), color = Semantica.ingreso, fontWeight = FontWeight.SemiBold)
+                            }
                         }
                     }
                 }

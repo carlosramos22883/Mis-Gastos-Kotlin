@@ -40,7 +40,7 @@ class AuthInterceptor @Inject constructor(
         val authenticatedRequest = originalRequest.newBuilder()
             .header("Authorization", "Bearer $token")
             .header("Accept", "application/json")
-            .header("Content-Type", "application/json")
+            // Content-Type lo pone Retrofit según el cuerpo (JSON o multipart con su "boundary")
             .build()
 
         return chain.proceed(authenticatedRequest)

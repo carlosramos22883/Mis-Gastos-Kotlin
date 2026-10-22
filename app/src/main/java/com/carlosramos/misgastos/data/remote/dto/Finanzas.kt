@@ -160,7 +160,9 @@ data class Categoria(
     val nombre: String,
     val tipo: String,
     val color: String?,
-    val activo: Boolean
+    val activo: Boolean,
+    /** false = de sistema o en uso de forma que no se edita (ej. "Saldo inicial") */
+    val editable: Boolean = true
 )
 
 // ---------- Compromisos (/api/compromisos) ----------
@@ -191,7 +193,17 @@ data class Recurrente(
     val id: Int,
     val frecuencia: String,
     @SerializedName("descripcion_frecuencia") val descripcionFrecuencia: String?,
-    val activo: Boolean
+    val activo: Boolean,
+    val descripcion: String? = null,
+    val monto: String? = null,
+    @SerializedName("dia_semana") val diaSemana: Int? = null,
+    @SerializedName("dia_pago") val diaPago: Int? = null,
+    @SerializedName("dia_pago_2") val diaPago2: Int? = null,
+    @SerializedName("fecha_inicio") val fechaInicio: String? = null,
+    @SerializedName("fecha_fin") val fechaFin: String? = null,
+    @SerializedName("total_cuotas") val totalCuotas: Int? = null,
+    @SerializedName("categoria_personal_id") val categoriaId: Int? = null,
+    @SerializedName("medio_pago") val medioPago: String? = null
 )
 
 data class PaginaCompromisos(
@@ -354,6 +366,8 @@ data class Prestamo(
     @SerializedName("banco_id") val bancoId: Int? = null,
     val tipo: String?,
     val acreedor: String?,
+    val banco: BancoLogo? = null,
+    val contacto: ContactoMini? = null,
     @SerializedName("monto_original") val montoOriginal: String,
     @SerializedName("tasa_anual") val tasaAnual: String?,
     @SerializedName("plazo_meses") val plazoMeses: Int?,
@@ -627,7 +641,25 @@ data class TarjetaDetalle(
     val movimientos: List<MovimientoTarjeta>,
     @SerializedName("en_cuotas") val enCuotas: List<EnCuotas>,
     @SerializedName("estados_cuenta") val estadosCuenta: List<EstadoCuenta>,
-    @SerializedName("por_pagar") val porPagar: List<PagoPendienteTarjeta>
+    @SerializedName("por_pagar") val porPagar: List<PagoPendienteTarjeta>,
+    val pagos: List<PagoTarjeta> = emptyList(),
+    @SerializedName("cargos_fijos") val cargosFijos: List<CargoFijo> = emptyList(),
+    /** Cargos fijos que se sumarán al cortar (aún no aplicados) */
+    @SerializedName("cargos_proximo_corte") val cargosProximoCorte: String = "0.00"
+)
+
+/** Lo que la tarjeta cobra en cada corte (seguro, membresía…); se agrega solo al estado de cuenta. */
+data class CargoFijo(val id: Int, val descripcion: String, val monto: String, val desde: String, val activo: Boolean)
+
+/** Un pago hecho a la tarjeta (clase: efectivo | cuenta | tarjeta). */
+data class PagoTarjeta(
+    val clase: String,
+    val id: Int,
+    val fecha: String,
+    val descripcion: String,
+    val desde: String,
+    val monto: String,
+    @SerializedName("user_id") val userId: Int?
 )
 
 /** tipo: compra | cargo | credito (los avances van por transferencia). */
@@ -741,3 +773,13 @@ data class FuenteBody(
     val activo: Boolean,
     @SerializedName("user_id") val userId: Int?
 )
+
+// ---------- Perfil y categorías ----------
+
+data class PerfilBody(val name: String, val email: String)
+
+data class PerfilRespuesta(val message: String?, val user: UserResponse?)
+
+data class AvatarRespuesta(val message: String?, @SerializedName("avatar_url") val avatarUrl: String?)
+
+data class CategoriaBody(val nombre: String, val tipo: String, val color: String, val activo: Boolean)

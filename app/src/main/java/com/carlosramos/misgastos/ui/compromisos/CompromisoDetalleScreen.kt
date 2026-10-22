@@ -171,7 +171,7 @@ class CompromisoDetalleViewModel @Inject constructor(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CompromisoDetalleScreen(onVolver: () -> Unit, onEditar: (Int) -> Unit, viewModel: CompromisoDetalleViewModel = hiltViewModel()) {
+fun CompromisoDetalleScreen(onVolver: () -> Unit, onEditar: (Int) -> Unit, onEditarSerie: (Int) -> Unit = {}, viewModel: CompromisoDetalleViewModel = hiltViewModel()) {
     val estado by viewModel.estado.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     var cancelar by remember { mutableStateOf<Boolean?>(null) } // false = este pago · true = la serie
@@ -224,6 +224,7 @@ fun CompromisoDetalleScreen(onVolver: () -> Unit, onEditar: (Int) -> Unit, viewM
                     Button(onClick = viewModel::abrirPago, modifier = Modifier.fillMaxWidth()) { Text("Pagar") }
                     if (c.tarjeta == null) OutlinedButton(onClick = { onEditar(c.id) }, modifier = Modifier.fillMaxWidth()) { Text("Editar este pago") }
                     OutlinedButton(onClick = { cancelar = false }, enabled = !estado.ocupado, modifier = Modifier.fillMaxWidth()) { Text("Cancelar este pago") }
+                    if (c.recurrente != null) OutlinedButton(onClick = { onEditarSerie(c.id) }, modifier = Modifier.fillMaxWidth()) { Text("Editar la serie (${c.recurrente.descripcionFrecuencia ?: c.recurrente.frecuencia})") }
                     if (c.recurrente?.activo == true) OutlinedButton(onClick = { cancelar = true }, enabled = !estado.ocupado, modifier = Modifier.fillMaxWidth()) {
                         Text("Cancelar la serie", color = MaterialTheme.colorScheme.error)
                     }

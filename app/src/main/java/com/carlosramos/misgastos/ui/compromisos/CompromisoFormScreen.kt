@@ -73,6 +73,8 @@ data class FormCompromiso(
     val finalizacion: String = "indefinido",
     val fechaFin: String = LocalDate.now().plusYears(1).toString(),
     val totalCuotas: String = "",
+    /** true = se edita la regla de la serie de este pago (no solo el pago) */
+    val serie: Boolean = false,
     val guardando: Boolean = false,
     val listo: Boolean = false,
     val errores: Map<String, String> = emptyMap(),
@@ -88,6 +90,7 @@ class CompromisoFormViewModel @Inject constructor(
 ) : ViewModel() {
     /** 0 = nuevo; si no, se edita ese pago (no la regla de la serie). */
     private val id: Int = estadoGuardado["id"] ?: 0
+    private val editarSerie: Boolean = estadoGuardado["serie"] ?: false
     private val _estado = MutableStateFlow(FormCompromisoEstado())
     val estado = _estado.asStateFlow()
 
@@ -95,7 +98,18 @@ class CompromisoFormViewModel @Inject constructor(
         viewModelScope.launch {
             val comunes = (repo.comunes() as? Resultado.Ok)?.datos
             var form = FormCompromiso(userId = comunes?.usuarioId)
-            if (id != 0) (repo.compromiso(id) as? Resultado.Ok)?.datos?.let { c ->
+            val c0 = if (id != 0) (repo.compromiso(id) as? Resultado.Ok)?.datos else null
+            val r = c0?.recurrente
+            if (editarSerie && c0 != null && r != null) {
+                form = FormCompromiso(
+                    id = c0.id, serie = true, recurrente = true, descripcion = r.descripcion ?: c0.descripcion, monto = r.monto ?: c0.monto,
+                    medioPago = r.medioPago ?: "por_definir", categoriaId = r.categoriaId, contactoId = c0.contacto?.id, userId = c0.userId,
+                    comentario = c0.comentario.orEmpty(), frecuencia = r.frecuencia, diaSemana = r.diaSemana ?: 1, diaPago = r.diaPago?.toString().orEmpty(),
+                    diaPago2 = r.diaPago2?.toString().orEmpty(), fechaInicio = r.fechaInicio ?: Formato.hoy(),
+                    finalizacion = when { r.fechaFin != null -> "fecha"; r.totalCuotas != null -> "cuotas"; else -> "indefinido" },
+                    fechaFin = r.fechaFin ?: java.time.LocalDate.now().plusYears(1).toString(), totalCuotas = r.totalCuotas?.toString().orEmpty()
+                )
+            } else if (c0 != null) c0.let { c ->
                 form = FormCompromiso(
                     id = c.id, descripcion = c.descripcion, monto = c.monto, medioPago = c.medioPago ?: "por_definir", categoriaId = c.categoria?.id,
                     contactoId = c.contacto?.id, userId = c.userId, comentario = c.comentario.orEmpty(), fechaEsperada = c.fechaEsperada ?: Formato.hoy()
@@ -127,17 +141,21 @@ class CompromisoFormViewModel @Inject constructor(
                 descripcion = f.descripcion.trim(), monto = f.monto, medioPago = f.medioPago, categoriaId = f.categoriaId,
                 comentario = f.comentario.trim().ifBlank { null }, contactoId = f.contactoId?.toString(), userId = f.userId,
                 recurrenciaTipo = if (f.id != null) null else if (f.recurrente) "recurrente" else "unica",
-                fechaEsperada = if (f.recurrente && f.id == null) null else f.fechaEsperada,
+                fechaEsperada = if (f.recurrente) null else f.fechaEsperada,
                 frecuencia = f.frecuencia.takeIf { f.recurrente },
                 diaSemana = f.diaSemana.takeIf { f.recurrente && f.frecuencia == "semanal" },
                 diaPago = f.diaPago.toIntOrNull().takeIf { f.recurrente && f.frecuencia != "semanal" },
                 diaPago2 = f.diaPago2.toIntOrNull().takeIf { f.recurrente && f.frecuencia == "quincenal" },
-                fechaInicio = f.fechaInicio.takeIf { f.recurrente },
+                fechaInicio = f.fechaInicio.takeIf { f.recurrente && !f.serie },
                 finalizacion = f.finalizacion.takeIf { f.recurrente },
                 fechaFin = f.fechaFin.takeIf { f.recurrente && f.finalizacion == "fecha" },
                 totalCuotas = f.totalCuotas.toIntOrNull().takeIf { f.recurrente && f.finalizacion == "cuotas" }
             )
-            val r = if (f.id == null) repo.crearCompromiso(body) else repo.editarCompromiso(f.id, body)
+            val r = when {
+                f.id == null -> repo.crearCompromiso(body)
+                f.serie -> repo.editarSerie(f.id, body)
+                else -> repo.editarCompromiso(f.id, body)
+            }
             when (r) {
                 is Resultado.Ok -> cambiar(f.copy(guardando = false, listo = true))
                 is Resultado.Falla -> cambiar(f.copy(guardando = false, errores = r.campos, error = r.mensaje))
@@ -156,7 +174,7 @@ fun CompromisoFormScreen(onListo: () -> Unit, onVolver: () -> Unit, viewModel: C
         contentWindowInsets = WindowInsets(0),
         topBar = {
             TopAppBar(
-                title = { Text(if (f.id == null) "Nuevo compromiso" else "Editar pago") }, windowInsets = WindowInsets(0),
+                title = { Text(when { f.id == null -> "Nuevo compromiso"; f.serie -> "Editar la serie"; else -> "Editar pago" }) }, windowInsets = WindowInsets(0),
                 navigationIcon = { IconButton(onClick = onVolver) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver") } }
             )
         }
@@ -179,7 +197,11 @@ fun CompromisoFormScreen(onListo: () -> Unit, onVolver: () -> Unit, viewModel: C
             )
             CampoMonto(if (f.recurrente) "Monto de cada pago" else "Monto", f.monto, { viewModel.cambiar(f.copy(monto = it)) }, error = f.errores["monto"])
 
-            if (!f.recurrente || f.id != null) {
+            if (f.serie) Text(
+                "Cambia la regla que se repite. Se aplica a los pagos de hoy en adelante que aún no tienen abonos; los pagados o abonados no cambian.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (!f.recurrente) {
                 CampoFecha("Fecha esperada", f.fechaEsperada, { viewModel.cambiar(f.copy(fechaEsperada = it)) }, desde = null, hasta = null, error = f.errores["fecha_esperada"])
             } else {
                 Desplegable("Frecuencia", listOf("mensual" to "Mensual", "quincenal" to "Quincenal", "semanal" to "Semanal"), f.frecuencia, { viewModel.cambiar(f.copy(frecuencia = it)) }, error = f.errores["frecuencia"])
@@ -195,7 +217,7 @@ fun CompromisoFormScreen(onListo: () -> Unit, onVolver: () -> Unit, viewModel: C
                     }
                 }
                 Text("31 = último día de cada mes.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                CampoFecha("Desde", f.fechaInicio, { viewModel.cambiar(f.copy(fechaInicio = it)) }, desde = null, hasta = null, error = f.errores["fecha_inicio"])
+                if (!f.serie) CampoFecha("Desde", f.fechaInicio, { viewModel.cambiar(f.copy(fechaInicio = it)) }, desde = null, hasta = null, error = f.errores["fecha_inicio"])
                 Desplegable(
                     "¿Hasta cuándo?", listOf("indefinido" to "Sin fecha de fin", "fecha" to "Hasta una fecha", "cuotas" to "Un número de pagos"),
                     f.finalizacion, { viewModel.cambiar(f.copy(finalizacion = it)) }, error = f.errores["finalizacion"]
@@ -224,7 +246,7 @@ fun CompromisoFormScreen(onListo: () -> Unit, onVolver: () -> Unit, viewModel: C
             )
             if (c.miembros.size > 1) Desplegable("¿Quién lo registra?", c.miembros.map { it.id to it.nombre }, f.userId, { viewModel.cambiar(f.copy(userId = it)) }, error = f.errores["user_id"])
             OutlinedTextField(value = f.comentario, onValueChange = { viewModel.cambiar(f.copy(comentario = it)) }, label = { Text("Comentario (opcional)") }, modifier = Modifier.fillMaxWidth())
-            if (f.id != null) Text("Solo cambia este pago; los demás de la serie siguen igual.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (f.id != null && !f.serie) Text("Solo cambia este pago; los demás de la serie siguen igual.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             f.error?.takeIf { f.errores.isEmpty() }?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Button(onClick = viewModel::guardar, enabled = !f.guardando, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
                 if (f.guardando) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) else Text("Guardar")

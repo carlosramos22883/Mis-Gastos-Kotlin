@@ -9,6 +9,7 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme = darkColorScheme(
@@ -50,8 +51,19 @@ fun MisGastosTheme(
         else -> LightColorScheme
     }
 
+    // Modo claro con el mismo contraste que la web: fondo gris (#E4E7EC) y tarjetas, barras y hojas en blanco
+    val esquema = if (darkTheme) colorScheme else colorScheme.copy(
+        background = FondoClaro,
+        surface = Color.White,
+        surfaceContainerLowest = Color.White,
+        surfaceContainerLow = Color.White,
+        surfaceContainer = Color.White,
+        surfaceContainerHigh = CabeceraClara,
+        surfaceVariant = CabeceraClara
+    )
+
     MaterialTheme(
-        colorScheme = colorScheme,
+        colorScheme = esquema,
         typography = Typography,
         content = content
     )
