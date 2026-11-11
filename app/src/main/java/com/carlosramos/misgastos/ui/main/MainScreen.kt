@@ -13,6 +13,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.EventNote
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.automirrored.filled.TrendingDown
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.Category
@@ -212,6 +213,7 @@ fun MainScreen(onCerrarSesion: () -> Unit, viewModel: MainViewModel = hiltViewMo
             }
             composable("perfil") { PerfilScreen(onListo = { nav.popBackStack() }, onVolver = { nav.popBackStack() }) }
             composable("categorias") { CategoriasScreen(onVolver = { nav.popBackStack() }) }
+            composable("proyecciones") { com.carlosramos.misgastos.ui.proyecciones.ProyeccionesScreen(onVolver = { nav.popBackStack() }) }
             composable("reportes") { com.carlosramos.misgastos.ui.reportes.ReportesScreen(onVolver = { nav.popBackStack() }, onAbrir = { nav.navigate(it) }) }
             composable("mas") { MasScreen(viewModel, salir, ir = { nav.navigate(it) }) }
         }
@@ -248,6 +250,7 @@ private fun MasScreen(viewModel: MainViewModel, onCerrarSesion: () -> Unit, ir: 
                 Triple("ingresos", "Ingresos", Icons.Default.Savings),
                 Triple("eventos", "Eventos (dividir la cuenta)", Icons.Default.Celebration),
                 Triple("reportes", "Reportes", Icons.Default.Assessment),
+                Triple("proyecciones", "Proyecciones", Icons.AutoMirrored.Filled.TrendingDown),
                 Triple("categorias", "Categorías", Icons.Default.Category)
             ).forEach { (ruta, texto, icono) ->
                 Row(Modifier.fillMaxWidth().clickable { ir(ruta) }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {

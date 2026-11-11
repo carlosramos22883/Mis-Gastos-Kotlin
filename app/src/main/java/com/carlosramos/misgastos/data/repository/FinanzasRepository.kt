@@ -185,6 +185,8 @@ class FinanzasRepository @Inject constructor(
 
     // ----- Reportes -----
 
+    /** ver = null: los escenarios más recientes; lista vacía: solo "Si sigo igual". */
+    suspend fun proyecciones(ver: List<Int>?) = llamar { api.proyecciones(ver?.joinToString(",")) }.datos()
     suspend fun reporteEjecucion(periodo: Map<String, String>) = llamar { api.reporteEjecucion(periodo) }
     suspend fun reporteGastos(periodo: Map<String, String>) = llamar { api.reporteGastos(periodo) }
     suspend fun reportePrestamos() = llamar { api.reportePrestamos() }

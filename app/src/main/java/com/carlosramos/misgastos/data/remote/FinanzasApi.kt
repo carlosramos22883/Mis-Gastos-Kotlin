@@ -196,6 +196,9 @@ interface FinanzasApi {
 
     // ----- Reportes (período: ciclo o desde/hasta) -----
 
+    @GET("proyecciones")
+    suspend fun proyecciones(@Query("ver") ver: String?): Response<Envoltura<com.carlosramos.misgastos.data.remote.dto.ProyeccionDeudas>>
+
     @GET("reportes/ejecucion")
     suspend fun reporteEjecucion(@QueryMap periodo: Map<String, String>): Response<com.carlosramos.misgastos.data.remote.dto.RespuestaReporte<com.carlosramos.misgastos.data.remote.dto.Ejecucion>>
 
