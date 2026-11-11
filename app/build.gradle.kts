@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -6,6 +8,13 @@ plugins {
     id("com.google.devtools.ksp")
     id("org.jetbrains.kotlin.plugin.serialization")
 }
+
+// URL de la API en casa (la Mac con el backend). Se puede cambiar en local.properties con
+// api.url.casa=http://IP:8081/api/ sin tocar este archivo.
+val propiedadesLocales = Properties().apply {
+    rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
+}
+val apiUrlCasa = propiedadesLocales.getProperty("api.url.casa", "http://192.168.1.25:8081/api/")
 
 android {
     namespace = "com.carlosramos.misgastos"
@@ -22,7 +31,15 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Emulador: 10.0.2.2 es el localhost de la computadora
+            buildConfigField("String", "API_URL", "\"http://10.0.2.2:8081/api/\"")
+        }
         release {
+            // Celular en la red de la casa
+            buildConfigField("String", "API_URL", "\"$apiUrlCasa\"")
+            // Uso personal: se firma con la llave de depuración para instalar el APK directo
+            signingConfig = signingConfigs.getByName("debug")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -42,6 +59,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

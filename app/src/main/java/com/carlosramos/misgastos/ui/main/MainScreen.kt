@@ -14,7 +14,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.EventNote
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.AccountBalance
+import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.Celebration
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.RequestQuote
 import androidx.compose.material.icons.filled.Savings
@@ -48,7 +50,6 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.carlosramos.misgastos.data.repository.Comunes
@@ -113,25 +114,33 @@ private val pestanas = listOf(
 @Composable
 fun MainScreen(onCerrarSesion: () -> Unit, viewModel: MainViewModel = hiltViewModel()) {
     val nav = rememberNavController()
-    val actual by nav.currentBackStackEntryAsState()
+    val pila by nav.currentBackStack.collectAsStateWithLifecycle()
     val salir = { viewModel.olvidar(); onCerrarSesion() }
     LaunchedEffect(Unit) { viewModel.sesion.expirada.collect { salir() } }
+    // La pestaña activa es la última pantalla principal en la pila: un compromiso abierto desde Inicio sigue en "Inicio"
+    // (atrás regresa a Inicio) y una cuenta abierta desde "Más" sigue en "Más"
+    val raices = pestanas.map { it.ruta }
+    val pestana = pila.lastOrNull { it.destination.route in raices }?.destination?.route ?: "inicio"
 
-    fun ir(ruta: String) = nav.navigate(ruta) {
-        popUpTo(nav.graph.findStartDestination().id) { saveState = true }
-        launchSingleTop = true
-        restoreState = true
+    // Tocar la pestaña activa regresa a su pantalla principal; otra pestaña recupera donde se había quedado
+    fun ir(ruta: String) {
+        if (ruta == pestana) {
+            nav.popBackStack(ruta, inclusive = false)
+            return
+        }
+        nav.navigate(ruta) {
+            popUpTo(nav.graph.findStartDestination().id) { saveState = true }
+            launchSingleTop = true
+            restoreState = true
+        }
     }
 
     Scaffold(
         bottomBar = {
-            val ruta = actual?.destination?.route.orEmpty()
             NavigationBar {
                 pestanas.forEach { p ->
                     NavigationBarItem(
-                        selected = ruta == p.ruta || (p.ruta == "compromisos" && ruta.startsWith("compromiso")) ||
-                            (p.ruta == "tarjetas" && ruta.startsWith("tarjeta")) ||
-                            (p.ruta == "mas" && listOf("cuenta", "contacto", "prestamo", "ingreso", "fuente", "perfil", "categorias").any { ruta.startsWith(it) }),
+                        selected = pestana == p.ruta,
                         onClick = { ir(p.ruta) },
                         icon = { Icon(p.icono, contentDescription = null) },
                         label = { Text(p.texto, maxLines = 1, softWrap = false, style = MaterialTheme.typography.labelSmall) }
@@ -158,7 +167,8 @@ fun MainScreen(onCerrarSesion: () -> Unit, viewModel: MainViewModel = hiltViewMo
                 CompromisoFormScreen(onListo = { nav.popBackStack() }, onVolver = { nav.popBackStack() })
             }
             composable("compromiso/{id}", arguments = listOf(navArgument("id") { type = NavType.IntType })) {
-                CompromisoDetalleScreen(onVolver = { nav.popBackStack() }, onEditar = { nav.navigate("compromiso-form/$it") }, onEditarSerie = { nav.navigate("compromiso-form/$it?serie=true") })
+                CompromisoDetalleScreen(onVolver = { nav.popBackStack() }, onEditar = { nav.navigate("compromiso-form/$it") }, onEditarSerie = { nav.navigate("compromiso-form/$it?serie=true") },
+                    onAbrirTarjeta = { nav.navigate("tarjeta/$it") })
             }
             composable("tarjetas") { TarjetasScreen(onAbrir = { nav.navigate("tarjeta/$it") }, onNueva = { nav.navigate("tarjeta-form/0") }) }
             composable("tarjeta/{id}", arguments = listOf(navArgument("id") { type = NavType.IntType })) {
@@ -188,8 +198,21 @@ fun MainScreen(onCerrarSesion: () -> Unit, viewModel: MainViewModel = hiltViewMo
             composable("tarjeta-form/{id}", arguments = conId) { TarjetaFormScreen(alTerminar("tarjetas"), { nav.popBackStack() }) }
             composable("prestamo-form/{id}", arguments = conId) { PrestamoFormScreen(alTerminar("prestamos"), { nav.popBackStack() }) }
             composable("fuente-form/{id}", arguments = conId) { FuenteFormScreen(alTerminar("ingresos"), { nav.popBackStack() }) }
+            composable("eventos") { com.carlosramos.misgastos.ui.eventos.EventosScreen(onAbrir = { nav.navigate("evento/$it") }, onNuevo = { nav.navigate("evento-form/0") }, onVolver = { nav.popBackStack() }) }
+            composable("evento/{id}", arguments = conId) {
+                com.carlosramos.misgastos.ui.eventos.EventoDetalleScreen(onVolver = { nav.popBackStack() }, onEditar = { nav.navigate("evento-form/$it") }, onEliminado = { nav.popBackStack() },
+                    onAbrirContacto = { nav.navigate("contacto/$it") })
+            }
+            // Al guardar se abre el evento (en lugar del formulario)
+            composable("evento-form/{id}", arguments = conId) {
+                com.carlosramos.misgastos.ui.eventos.EventoFormScreen(
+                    onListo = { id -> nav.navigate("evento/$id") { popUpTo("eventos") } },
+                    onVolver = { nav.popBackStack() }
+                )
+            }
             composable("perfil") { PerfilScreen(onListo = { nav.popBackStack() }, onVolver = { nav.popBackStack() }) }
             composable("categorias") { CategoriasScreen(onVolver = { nav.popBackStack() }) }
+            composable("reportes") { com.carlosramos.misgastos.ui.reportes.ReportesScreen(onVolver = { nav.popBackStack() }, onAbrir = { nav.navigate(it) }) }
             composable("mas") { MasScreen(viewModel, salir, ir = { nav.navigate(it) }) }
         }
     }
@@ -223,6 +246,8 @@ private fun MasScreen(viewModel: MainViewModel, onCerrarSesion: () -> Unit, ir: 
                 Triple("contactos", "Contactos y \"nos deben\"", Icons.Default.People),
                 Triple("prestamos", "Préstamos", Icons.Default.RequestQuote),
                 Triple("ingresos", "Ingresos", Icons.Default.Savings),
+                Triple("eventos", "Eventos (dividir la cuenta)", Icons.Default.Celebration),
+                Triple("reportes", "Reportes", Icons.Default.Assessment),
                 Triple("categorias", "Categorías", Icons.Default.Category)
             ).forEach { (ruta, texto, icono) ->
                 Row(Modifier.fillMaxWidth().clickable { ir(ruta) }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {

@@ -1,14 +1,12 @@
 package com.carlosramos.misgastos.util
 
-object Constants {
-    // URL del servidor Laravel
-    // Si estás probando en local desde el emulador de Android:
-    //   - Usa "10.0.2.2" para acceder a "localhost" de tu computadora
-    //   - Ejemplo: http://10.0.2.2:8081/api/
-    // Si tu API está en un servidor real:
-    //   - Ejemplo: https://misgastos.com/api/
+import com.carlosramos.misgastos.BuildConfig
 
-    const val BASE_URL = "http://10.0.2.2:8081/api/"
+object Constants {
+    // URL del servidor Laravel, según el tipo de build (ver app/build.gradle.kts):
+    //   - debug: emulador, http://10.0.2.2:8081/api/ (el localhost de la computadora)
+    //   - release: celular en la red de la casa, http://IP-de-la-Mac:8081/api/
+    val BASE_URL: String = BuildConfig.API_URL
 
     // Nombre del archivo de DataStore (para guardar el token)
     const val DATASTORE_NAME = "mis_gastos_preferences"

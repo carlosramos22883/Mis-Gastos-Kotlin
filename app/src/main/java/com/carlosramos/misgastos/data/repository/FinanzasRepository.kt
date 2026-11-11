@@ -111,6 +111,11 @@ class FinanzasRepository @Inject constructor(
     suspend fun guardarMovimientoTarjeta(tarjetaId: Int, id: Int?, body: com.carlosramos.misgastos.data.remote.dto.MovimientoTarjetaBody) =
         llamar { if (id == null) api.crearMovimientoTarjeta(tarjetaId, body) else api.editarMovimientoTarjeta(tarjetaId, id, body) }.datos()
     suspend fun eliminarMovimientoTarjeta(tarjetaId: Int, id: Int) = llamarSinCuerpo { api.eliminarMovimientoTarjeta(tarjetaId, id) }
+    suspend fun guardarCargoFijo(tarjetaId: Int, id: Int?, body: com.carlosramos.misgastos.data.remote.dto.CargoFijoBody) =
+        llamar { if (id == null) api.crearCargoFijo(tarjetaId, body) else api.editarCargoFijo(tarjetaId, id, body) }.datos()
+    suspend fun eliminarCargoFijo(tarjetaId: Int, id: Int) = llamarSinCuerpo { api.eliminarCargoFijo(tarjetaId, id) }
+    suspend fun guardarIntereses(tarjetaId: Int, estadoId: Int, monto: String) =
+        llamar { api.interesesEstado(tarjetaId, estadoId, com.carlosramos.misgastos.data.remote.dto.InteresesBody(monto)) }.datos()
 
     suspend fun contacto(id: Int) = llamar { api.contacto(id) }.datos()
     suspend fun guardarContacto(id: Int?, body: com.carlosramos.misgastos.data.remote.dto.ContactoBody) =
@@ -177,6 +182,57 @@ class FinanzasRepository @Inject constructor(
     suspend fun guardarCategoria(id: Int?, b: com.carlosramos.misgastos.data.remote.dto.CategoriaBody) =
         llamar { if (id == null) api.crearCategoria(b) else api.editarCategoria(id, b) }.datos().also { if (it is Resultado.Ok) olvidar() }
     suspend fun eliminarCategoria(id: Int) = llamarSinCuerpo { api.eliminarCategoria(id) }.also { if (it is Resultado.Ok) olvidar() }
+
+    // ----- Reportes -----
+
+    suspend fun reporteEjecucion(periodo: Map<String, String>) = llamar { api.reporteEjecucion(periodo) }
+    suspend fun reporteGastos(periodo: Map<String, String>) = llamar { api.reporteGastos(periodo) }
+    suspend fun reportePrestamos() = llamar { api.reportePrestamos() }
+    suspend fun reporteEstadoCuenta(tarjeta: Int?, estado: Int?) = llamar { api.reporteEstadoCuenta(tarjeta, estado) }
+
+    suspend fun eventos() = llamar { api.eventos() }.datos()
+    suspend fun evento(id: Int) = llamar { api.evento(id) }.datos()
+    suspend fun opcionesEvento() = llamar { api.opcionesEvento() }.datos()
+    suspend fun guardarEvento(id: Int?, body: com.carlosramos.misgastos.data.remote.dto.EventoBody) =
+        llamar { if (id == null) api.crearEvento(body) else api.editarEvento(id, body) }.datos()
+    suspend fun eliminarEvento(id: Int) = llamarSinCuerpo { api.eliminarEvento(id) }
+    /** Foto de la cuenta (JPEG ya reducido con Imagen.reducida). */
+    suspend fun subirFotoEvento(id: Int, jpeg: ByteArray) =
+        llamar { api.subirFotoEvento(id, okhttp3.MultipartBody.Part.createFormData("foto", "cuenta.jpg", jpeg.toRequestBody("image/jpeg".toMediaType()))) }.datos()
+    suspend fun quitarFotoEvento(id: Int) = llamar { api.quitarFotoEvento(id) }.datos()
+    suspend fun cobrarEvento(id: Int, participante: Int, body: com.carlosramos.misgastos.data.remote.dto.CobroEventoBody) = llamar { api.cobrarEvento(id, participante, body) }.datos()
+    suspend fun marcarPagadoEvento(id: Int, participante: Int, body: com.carlosramos.misgastos.data.remote.dto.PagadoEventoBody) = llamar { api.marcarPagadoEvento(id, participante, body) }.datos()
+    suspend fun desmarcarPagadoEvento(id: Int, participante: Int) = llamar { api.desmarcarPagadoEvento(id, participante) }.datos()
+
+    /** Descarga la imagen del cuadro de un evento a [destino] (carpeta de caché) para compartirla. */
+    suspend fun descargarImagenEvento(id: Int, destino: java.io.File): Resultado<java.io.File> = try {
+        val respuesta = api.imagenEvento(id)
+        val cuerpo = respuesta.body()
+        if (!respuesta.isSuccessful || cuerpo == null) falla(respuesta) else {
+            destino.mkdirs()
+            val archivo = java.io.File(destino, "evento-$id.png")
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { cuerpo.byteStream().use { e -> archivo.outputStream().use { e.copyTo(it) } } }
+            Resultado.Ok(archivo)
+        }
+    } catch (e: Exception) {
+        Resultado.Falla("No se pudo descargar la imagen. Revisa tu conexión.")
+    }
+
+    /** Descarga el reporte al [destino] (carpeta de caché) y devuelve el archivo. */
+    suspend fun descargarReporte(reporte: String, parametros: Map<String, String>, destino: java.io.File): Resultado<java.io.File> = try {
+        val respuesta = api.exportarReporte(reporte, parametros)
+        val cuerpo = respuesta.body()
+        if (!respuesta.isSuccessful || cuerpo == null) falla(respuesta) else {
+            val nombre = respuesta.headers()["content-disposition"]?.substringAfter("filename=", "")?.trim('"', ' ')?.takeIf { it.isNotBlank() }
+                ?: "reporte_$reporte.${parametros["formato"] ?: "pdf"}"
+            destino.mkdirs()
+            val archivo = java.io.File(destino, nombre)
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { cuerpo.byteStream().use { e -> archivo.outputStream().use { e.copyTo(it) } } }
+            Resultado.Ok(archivo)
+        }
+    } catch (e: Exception) {
+        Resultado.Falla("No se pudo descargar el reporte. Revisa tu conexión.")
+    }
 
     private fun texto(valor: String) = valor.toRequestBody("text/plain".toMediaType())
 

@@ -170,6 +170,12 @@ fun TarjetaVisual(t: Tarjeta, titular: String?, foto: String? = null, mostrarFot
         Spacer(Modifier.height(14.dp))
         Text("Disponible", color = texto.copy(alpha = 0.85f), fontSize = 12.sp)
         Text(Formato.dinero(t.disponible), color = texto, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        t.cargosSinRestar?.toDoubleOrNull()?.takeIf { it > 0 }?.let {
+            Text("${Formato.dinero(it)} de cargos del banco aún sin restar", color = texto.copy(alpha = 0.85f), fontSize = 12.sp)
+        }
+        t.interesesRetenidos?.toDoubleOrNull()?.takeIf { it > 0 }?.let {
+            Text("${Formato.dinero(it)} de intereses retenidos hasta el próximo corte", color = texto.copy(alpha = 0.85f), fontSize = 12.sp)
+        }
         Spacer(Modifier.height(6.dp))
         LinearProgressIndicator(
             progress = { uso }, modifier = Modifier.fillMaxWidth().height(6.dp), color = texto, trackColor = texto.copy(alpha = 0.25f), strokeCap = StrokeCap.Round

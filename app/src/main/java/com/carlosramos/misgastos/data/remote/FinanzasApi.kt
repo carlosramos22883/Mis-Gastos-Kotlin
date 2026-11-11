@@ -54,6 +54,7 @@ import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
+import retrofit2.http.QueryMap
 
 /** Endpoints de finanzas (requieren el token de Sanctum, que agrega AuthInterceptor). */
 interface FinanzasApi {
@@ -181,6 +182,38 @@ interface FinanzasApi {
     @DELETE("tarjetas/{id}/movimientos/{mov}")
     suspend fun eliminarMovimientoTarjeta(@Path("id") tarjetaId: Int, @Path("mov") id: Int): Response<Unit>
 
+    @PATCH("tarjetas/{id}/estados-cuenta/{estado}/intereses")
+    suspend fun interesesEstado(@Path("id") tarjetaId: Int, @Path("estado") estadoId: Int, @Body body: com.carlosramos.misgastos.data.remote.dto.InteresesBody): Response<Envoltura<Tarjeta>>
+
+    @POST("tarjetas/{id}/cargos-fijos")
+    suspend fun crearCargoFijo(@Path("id") tarjetaId: Int, @Body body: com.carlosramos.misgastos.data.remote.dto.CargoFijoBody): Response<Envoltura<com.carlosramos.misgastos.data.remote.dto.CargoFijo>>
+
+    @PUT("tarjetas/{id}/cargos-fijos/{cargo}")
+    suspend fun editarCargoFijo(@Path("id") tarjetaId: Int, @Path("cargo") id: Int, @Body body: com.carlosramos.misgastos.data.remote.dto.CargoFijoBody): Response<Envoltura<com.carlosramos.misgastos.data.remote.dto.CargoFijo>>
+
+    @DELETE("tarjetas/{id}/cargos-fijos/{cargo}")
+    suspend fun eliminarCargoFijo(@Path("id") tarjetaId: Int, @Path("cargo") id: Int): Response<Unit>
+
+    // ----- Reportes (período: ciclo o desde/hasta) -----
+
+    @GET("reportes/ejecucion")
+    suspend fun reporteEjecucion(@QueryMap periodo: Map<String, String>): Response<com.carlosramos.misgastos.data.remote.dto.RespuestaReporte<com.carlosramos.misgastos.data.remote.dto.Ejecucion>>
+
+    @GET("reportes/gastos")
+    suspend fun reporteGastos(@QueryMap periodo: Map<String, String>): Response<com.carlosramos.misgastos.data.remote.dto.RespuestaReporte<com.carlosramos.misgastos.data.remote.dto.GastosReporte>>
+
+    @GET("reportes/prestamos")
+    suspend fun reportePrestamos(): Response<com.carlosramos.misgastos.data.remote.dto.RespuestaReporte<com.carlosramos.misgastos.data.remote.dto.PrestamosReporte>>
+
+    /** Sin estado: data = null y cortes = los de la tarjeta. */
+    @GET("reportes/estado-cuenta")
+    suspend fun reporteEstadoCuenta(@Query("tarjeta") tarjeta: Int?, @Query("estado") estado: Int?): Response<com.carlosramos.misgastos.data.remote.dto.RespuestaReporte<com.carlosramos.misgastos.data.remote.dto.EstadoReporte>>
+
+    /** El archivo (pdf, xlsx o csv); exige reportes.export. */
+    @retrofit2.http.Streaming
+    @GET("reportes/{reporte}/exportar")
+    suspend fun exportarReporte(@Path("reporte") reporte: String, @QueryMap parametros: Map<String, String>): Response<okhttp3.ResponseBody>
+
     // ----- Contactos y lo que nos deben -----
 
     @GET("contactos/{id}")
@@ -283,4 +316,24 @@ interface FinanzasApi {
     @POST("categorias") suspend fun crearCategoria(@Body body: CategoriaBody): Response<Envoltura<Categoria>>
     @PUT("categorias/{id}") suspend fun editarCategoria(@Path("id") id: Int, @Body body: CategoriaBody): Response<Envoltura<Categoria>>
     @DELETE("categorias/{id}") suspend fun eliminarCategoria(@Path("id") id: Int): Response<Unit>
+
+    // Eventos: dividir la cuenta
+    @GET("eventos") suspend fun eventos(): Response<Envoltura<List<com.carlosramos.misgastos.data.remote.dto.Evento>>>
+    @GET("eventos/opciones") suspend fun opcionesEvento(): Response<Envoltura<com.carlosramos.misgastos.data.remote.dto.OpcionesEvento>>
+    @GET("eventos/{id}") suspend fun evento(@Path("id") id: Int): Response<Envoltura<com.carlosramos.misgastos.data.remote.dto.Evento>>
+    @POST("eventos") suspend fun crearEvento(@Body body: com.carlosramos.misgastos.data.remote.dto.EventoBody): Response<Envoltura<com.carlosramos.misgastos.data.remote.dto.Evento>>
+    @PUT("eventos/{id}") suspend fun editarEvento(@Path("id") id: Int, @Body body: com.carlosramos.misgastos.data.remote.dto.EventoBody): Response<Envoltura<com.carlosramos.misgastos.data.remote.dto.Evento>>
+    @DELETE("eventos/{id}") suspend fun eliminarEvento(@Path("id") id: Int): Response<Unit>
+    @retrofit2.http.Streaming
+    @GET("eventos/{id}/imagen") suspend fun imagenEvento(@Path("id") id: Int): Response<okhttp3.ResponseBody>
+    @Multipart
+    @POST("eventos/{id}/foto")
+    suspend fun subirFotoEvento(@Path("id") id: Int, @Part foto: MultipartBody.Part): Response<Envoltura<com.carlosramos.misgastos.data.remote.dto.Evento>>
+    @DELETE("eventos/{id}/foto") suspend fun quitarFotoEvento(@Path("id") id: Int): Response<Envoltura<com.carlosramos.misgastos.data.remote.dto.Evento>>
+    @POST("eventos/{id}/participantes/{p}/cobro")
+    suspend fun cobrarEvento(@Path("id") id: Int, @Path("p") participante: Int, @Body body: com.carlosramos.misgastos.data.remote.dto.CobroEventoBody): Response<Envoltura<com.carlosramos.misgastos.data.remote.dto.Evento>>
+    @POST("eventos/{id}/participantes/{p}/pagado")
+    suspend fun marcarPagadoEvento(@Path("id") id: Int, @Path("p") participante: Int, @Body body: com.carlosramos.misgastos.data.remote.dto.PagadoEventoBody): Response<Envoltura<com.carlosramos.misgastos.data.remote.dto.Evento>>
+    @DELETE("eventos/{id}/participantes/{p}/pagado")
+    suspend fun desmarcarPagadoEvento(@Path("id") id: Int, @Path("p") participante: Int): Response<Envoltura<com.carlosramos.misgastos.data.remote.dto.Evento>>
 }

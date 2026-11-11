@@ -1,6 +1,11 @@
 package com.carlosramos.misgastos.ui.altas
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
@@ -24,6 +29,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.carlosramos.misgastos.data.remote.dto.CargoBody
+import com.carlosramos.misgastos.data.remote.dto.ConceptoBody
 import com.carlosramos.misgastos.data.remote.dto.FuenteBody
 import com.carlosramos.misgastos.data.remote.dto.PrestamoBody
 import com.carlosramos.misgastos.data.repository.FinanzasRepository
@@ -200,6 +206,17 @@ fun PrestamoFormScreen(onListo: (eliminado: Boolean) -> Unit, onVolver: () -> Un
 
 // ======================= Fuente de ingreso =======================
 
+/** Concepto de la plantilla. modo: fijo (monto) | porcentaje (del bruto, con tope opcional) | variable (se escribe en cada pago). */
+data class FormConcepto(
+    val nombre: String = "",
+    val tipo: String = "descuento",
+    val modo: String = "fijo",
+    val monto: String = "",
+    val porcentaje: String = "",
+    val tope: String = "",
+    val prestamoId: Int? = null
+)
+
 data class FormFuente(
     val id: Int? = null,
     val nombre: String = "",
@@ -212,7 +229,8 @@ data class FormFuente(
     val destino: String = "efectivo",
     val color: String = "#16A34A",
     val activo: Boolean = true,
-    val userId: Int? = null
+    val userId: Int? = null,
+    val conceptos: List<FormConcepto> = emptyList()
 )
 
 @HiltViewModel
@@ -222,17 +240,29 @@ class FuenteFormViewModel @Inject constructor(private val repo: FinanzasReposito
     val estado = _e.asStateFlow()
     private val _destinos = MutableStateFlow<List<Pair<String, String>>>(emptyList())
     val destinos = _destinos.asStateFlow()
+    /** Préstamos activos: un descuento puede ser la cuota de uno (se registra como su pago). */
+    private val _prestamos = MutableStateFlow<List<Pair<Int?, String>>>(emptyList())
+    val prestamos = _prestamos.asStateFlow()
 
     init {
         viewModelScope.launch {
             val cat = (repo.catalogos() as? Resultado.Ok)?.datos
             val comunes = (repo.comunes() as? Resultado.Ok)?.datos
             _destinos.value = (repo.cajas() as? Resultado.Ok)?.datos.orEmpty().map { it.valor to it.nombre }
+            _prestamos.value = (repo.prestamos() as? Resultado.Ok)?.datos.orEmpty().filter { it.activo }.map { it.id to it.nombre }
             var f = FormFuente(tipoId = cat?.tiposIngreso?.firstOrNull()?.id, userId = comunes?.usuarioId)
             if (id != 0) (repo.ingreso(id) as? Resultado.Ok)?.datos?.let { s ->
                 f = FormFuente(
                     s.id, s.nombre, s.tipoIngresoId, s.pagador.orEmpty(), s.frecuencia, s.diaPago?.toString().orEmpty(), s.diaPago2?.toString().orEmpty(),
-                    s.montoBruto?.takeIf { (it.toDoubleOrNull() ?: 0.0) > 0 }.orEmpty(), s.destino ?: "efectivo", s.color ?: "#16A34A", s.activo, s.userId
+                    s.montoBruto?.takeIf { (it.toDoubleOrNull() ?: 0.0) > 0 }.orEmpty(), s.destino ?: "efectivo", s.color ?: "#16A34A", s.activo, s.userId,
+                    s.conceptos.map { c ->
+                        FormConcepto(
+                            c.nombre, c.tipo,
+                            modo = when { c.porcentaje != null -> "porcentaje"; (c.monto?.toDoubleOrNull() ?: 0.0) > 0 -> "fijo"; else -> "variable" },
+                            monto = c.monto?.takeIf { (it.toDoubleOrNull() ?: 0.0) > 0 }.orEmpty(), porcentaje = c.porcentaje.orEmpty(),
+                            tope = c.tope?.takeIf { (it.toDoubleOrNull() ?: 0.0) > 0 }.orEmpty(), prestamoId = c.prestamoId
+                        )
+                    }
                 )
             }
             _e.value = EstadoForm(cargando = false, catalogos = cat, comunes = comunes, form = f)
@@ -249,13 +279,26 @@ class FuenteFormViewModel @Inject constructor(private val repo: FinanzasReposito
             if (f.diaPago.isNotBlank() && (f.diaPago.toIntOrNull() ?: 0) !in 1..31) put("dia_pago", "Día del 1 al 31.")
             if (f.frecuencia == "quincenal" && (f.diaPago2.toIntOrNull() ?: 0) !in 1..31) put("dia_pago_2", "Día del 1 al 31.")
             if (f.montoBruto.isNotBlank() && !dineroValido(f.montoBruto)) put("monto_bruto", "Máximo dos decimales.")
+            f.conceptos.forEachIndexed { i, c ->
+                if (c.nombre.isBlank()) put("conceptos.$i.nombre", "Escribe el nombre (ej. AFP).")
+                if (c.modo == "fijo" && !Formato.montoValido(c.monto)) put("conceptos.$i.monto", "Monto con máximo dos decimales.")
+                if (c.modo == "porcentaje" && (c.porcentaje.toDoubleOrNull() ?: -1.0) !in 0.0..100.0) put("conceptos.$i.porcentaje", "Entre 0 y 100.")
+                if (c.modo == "porcentaje" && c.tope.isNotBlank() && !dineroValido(c.tope)) put("conceptos.$i.tope", "Máximo dos decimales.")
+            }
         }
         if (errores.isNotEmpty()) { _e.value = _e.value.copy(errores = errores); return }
         _e.value = _e.value.copy(guardando = true, errores = emptyMap(), error = null)
         viewModelScope.launch {
             val body = FuenteBody(
                 f.nombre.trim(), f.tipoId!!, f.pagador.trim().ifBlank { null }, f.frecuencia, f.diaPago.toIntOrNull(),
-                f.diaPago2.toIntOrNull().takeIf { f.frecuencia == "quincenal" }, f.montoBruto.ifBlank { null }, f.destino, f.color, f.activo, f.userId
+                f.diaPago2.toIntOrNull().takeIf { f.frecuencia == "quincenal" }, f.montoBruto.ifBlank { null }, f.destino, f.color, f.activo, f.userId,
+                // La plantilla completa viaja siempre: lo que se quitó aquí se quita en el servidor
+                conceptos = f.conceptos.map { c ->
+                    ConceptoBody(
+                        c.nombre.trim(), c.tipo, c.monto.takeIf { c.modo == "fijo" }, c.porcentaje.takeIf { c.modo == "porcentaje" },
+                        c.tope.takeIf { c.modo == "porcentaje" && it.isNotBlank() }, c.prestamoId.takeIf { c.tipo == "descuento" }
+                    )
+                }
             )
             _e.value = when (val r = repo.guardarFuente(f.id, body)) {
                 is Resultado.Ok -> _e.value.copy(guardando = false, listo = true)
@@ -276,6 +319,7 @@ class FuenteFormViewModel @Inject constructor(private val repo: FinanzasReposito
 fun FuenteFormScreen(onListo: (eliminado: Boolean) -> Unit, onVolver: () -> Unit, viewModel: FuenteFormViewModel = hiltViewModel()) {
     val e by viewModel.estado.collectAsStateWithLifecycle()
     val destinos by viewModel.destinos.collectAsStateWithLifecycle()
+    val prestamos by viewModel.prestamos.collectAsStateWithLifecycle()
     val f = e.form
     LaunchedEffect(e.listo) { if (e.listo) onListo(e.eliminado) }
     PantallaFormulario(
@@ -297,7 +341,48 @@ fun FuenteFormScreen(onListo: (eliminado: Boolean) -> Unit, onVolver: () -> Unit
         }
         SelectorColor(f.color) { viewModel.cambiar(f.copy(color = it)) }
         if (f.id != null) FilaInterruptor("Activa", f.activo, { viewModel.cambiar(f.copy(activo = it)) })
-        Text("Los descuentos de planilla (ISSS, AFP, renta, préstamos) se configuran en la web.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        PlantillaConceptos(f.conceptos, prestamos, e.errores) { viewModel.cambiar(f.copy(conceptos = it)) }
     }
 }
 
+/** Plantilla de descuentos y adiciones (ISSS, AFP, renta, cuota de un préstamo, bonos…): se propone en cada pago recibido. */
+@Composable
+private fun PlantillaConceptos(conceptos: List<FormConcepto>, prestamos: List<Pair<Int?, String>>, errores: Map<String, String>, onCambio: (List<FormConcepto>) -> Unit) {
+    Text("Descuentos y adiciones", style = MaterialTheme.typography.titleSmall)
+    Text("Se proponen solos al registrar cada pago; ahí se ajustan a la boleta.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    conceptos.forEachIndexed { i, c ->
+        val cambiar = { n: FormConcepto -> onCambio(conceptos.toMutableList().also { it[i] = n }) }
+        if (i > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    c.nombre, { cambiar(c.copy(nombre = it)) }, label = { Text("Nombre") }, singleLine = true,
+                    isError = errores["conceptos.$i.nombre"] != null, supportingText = errores["conceptos.$i.nombre"]?.let { { Text(it) } }, modifier = Modifier.weight(1f)
+                )
+                IconButton(onClick = { onCambio(conceptos.filterIndexed { j, _ -> j != i }) }) { Icon(Icons.Default.Close, contentDescription = "Quitar ${c.nombre}") }
+            }
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                listOf("descuento" to "Descuento", "adicion" to "Adición").forEachIndexed { k, (t, texto) ->
+                    SegmentedButton(selected = c.tipo == t, onClick = { cambiar(c.copy(tipo = t)) }, shape = SegmentedButtonDefaults.itemShape(k, 2)) { Text(texto) }
+                }
+            }
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                listOf("fijo" to "Monto fijo", "porcentaje" to "% del bruto", "variable" to "Variable").forEachIndexed { k, (m, texto) ->
+                    SegmentedButton(selected = c.modo == m, onClick = { cambiar(c.copy(modo = m)) }, shape = SegmentedButtonDefaults.itemShape(k, 3)) { Text(texto) }
+                }
+            }
+            when (c.modo) {
+                "fijo" -> CampoMonto("Monto", c.monto, { cambiar(c.copy(monto = it)) }, error = errores["conceptos.$i.monto"])
+                "porcentaje" -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CampoTexto("Porcentaje %", c.porcentaje, { cambiar(c.copy(porcentaje = soloNumero(it))) }, errores["conceptos.$i.porcentaje"], Modifier.weight(1f), numerico = true)
+                    CampoMonto("Tope (opcional)", c.tope, { cambiar(c.copy(tope = it)) }, Modifier.weight(1f), error = errores["conceptos.$i.tope"])
+                }
+                else -> Text("El monto se escribe en cada pago (ej. horas extra, renta que cambia).", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            if (c.tipo == "descuento" && prestamos.isNotEmpty()) Desplegable(
+                "¿Es la cuota de un préstamo?", listOf<Pair<Int?, String>>(null to "No") + prestamos, c.prestamoId, { cambiar(c.copy(prestamoId = it)) }
+            )
+        }
+    }
+    TextButton(onClick = { onCambio(conceptos + FormConcepto()) }) { Icon(Icons.Default.Add, contentDescription = null); Text("Agregar concepto") }
+}

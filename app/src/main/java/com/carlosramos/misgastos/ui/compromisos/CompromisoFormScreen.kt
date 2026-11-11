@@ -73,6 +73,8 @@ data class FormCompromiso(
     val finalizacion: String = "indefinido",
     val fechaFin: String = LocalDate.now().plusYears(1).toString(),
     val totalCuotas: String = "",
+    /** Presupuesto (súper, gasolina…): no se paga, se descuenta con los gastos de su categoría */
+    val esPresupuesto: Boolean = false,
     /** true = se edita la regla de la serie de este pago (no solo el pago) */
     val serie: Boolean = false,
     val guardando: Boolean = false,
@@ -107,7 +109,8 @@ class CompromisoFormViewModel @Inject constructor(
                     comentario = c0.comentario.orEmpty(), frecuencia = r.frecuencia, diaSemana = r.diaSemana ?: 1, diaPago = r.diaPago?.toString().orEmpty(),
                     diaPago2 = r.diaPago2?.toString().orEmpty(), fechaInicio = r.fechaInicio ?: Formato.hoy(),
                     finalizacion = when { r.fechaFin != null -> "fecha"; r.totalCuotas != null -> "cuotas"; else -> "indefinido" },
-                    fechaFin = r.fechaFin ?: java.time.LocalDate.now().plusYears(1).toString(), totalCuotas = r.totalCuotas?.toString().orEmpty()
+                    fechaFin = r.fechaFin ?: java.time.LocalDate.now().plusYears(1).toString(), totalCuotas = r.totalCuotas?.toString().orEmpty(),
+                    esPresupuesto = r.esPresupuesto == true
                 )
             } else if (c0 != null) c0.let { c ->
                 form = FormCompromiso(
@@ -149,7 +152,8 @@ class CompromisoFormViewModel @Inject constructor(
                 fechaInicio = f.fechaInicio.takeIf { f.recurrente && !f.serie },
                 finalizacion = f.finalizacion.takeIf { f.recurrente },
                 fechaFin = f.fechaFin.takeIf { f.recurrente && f.finalizacion == "fecha" },
-                totalCuotas = f.totalCuotas.toIntOrNull().takeIf { f.recurrente && f.finalizacion == "cuotas" }
+                totalCuotas = f.totalCuotas.toIntOrNull().takeIf { f.recurrente && f.finalizacion == "cuotas" },
+                esPresupuesto = f.esPresupuesto.takeIf { f.recurrente }
             )
             val r = when {
                 f.id == null -> repo.crearCompromiso(body)
@@ -230,6 +234,11 @@ fun CompromisoFormScreen(onListo: () -> Unit, onVolver: () -> Unit, viewModel: C
                         isError = f.errores["total_cuotas"] != null, supportingText = f.errores["total_cuotas"]?.let { { Text(it) } }, modifier = Modifier.fillMaxWidth()
                     )
                 }
+                com.carlosramos.misgastos.ui.altas.FilaInterruptor(
+                    "Es un presupuesto", f.esPresupuesto, { viewModel.cambiar(f.copy(esPresupuesto = it)) },
+                    "Súper, gasolina…: no se paga, se descuenta solo con los gastos de su categoría en cada ciclo"
+                )
+                f.errores["es_presupuesto"]?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
             }
 
             Desplegable(

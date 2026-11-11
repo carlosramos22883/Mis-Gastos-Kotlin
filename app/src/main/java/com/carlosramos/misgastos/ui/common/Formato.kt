@@ -55,7 +55,7 @@ object Formato {
     }
 
     /**
-     * El servidor arma las URLs con su propio host (localhost); el emulador lo ve como 10.0.2.2.
+     * El servidor arma las URLs con su propio host (localhost), que el emulador o el celular no ven.
      * Se reemplaza el origen por el de la API configurada.
      */
     fun urlImagen(url: String?): String? {

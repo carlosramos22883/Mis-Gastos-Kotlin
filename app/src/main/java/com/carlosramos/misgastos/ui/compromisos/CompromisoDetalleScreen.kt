@@ -41,6 +41,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -150,7 +151,8 @@ class CompromisoDetalleViewModel @Inject constructor(
             val body = PagoCompromisoBody(f.origen!!, f.descripcion.trim(), f.monto, f.fecha, if (c.tarjeta == null) f.categoriaId else null, f.userId)
             when (val r = repo.pagarCompromiso(id, body)) {
                 is Resultado.Ok -> {
-                    _estado.value = _estado.value.copy(pago = null, mensaje = "Pago registrado.")
+                    val excedente = r.datos.excedente?.toDoubleOrNull() ?: 0.0
+                    _estado.value = _estado.value.copy(pago = null, mensaje = if (excedente > 0) "Pago registrado. Pagaste ${Formato.dinero(excedente)} de más: quedaron como crédito en la tarjeta." else "Pago registrado.")
                     cargar()
                 }
                 is Resultado.Falla -> cambiarPago(f.copy(guardando = false, errores = r.campos, error = r.mensaje))
@@ -171,7 +173,7 @@ class CompromisoDetalleViewModel @Inject constructor(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CompromisoDetalleScreen(onVolver: () -> Unit, onEditar: (Int) -> Unit, onEditarSerie: (Int) -> Unit = {}, viewModel: CompromisoDetalleViewModel = hiltViewModel()) {
+fun CompromisoDetalleScreen(onVolver: () -> Unit, onEditar: (Int) -> Unit, onEditarSerie: (Int) -> Unit = {}, onAbrirTarjeta: (Int) -> Unit = {}, viewModel: CompromisoDetalleViewModel = hiltViewModel()) {
     val estado by viewModel.estado.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     var cancelar by remember { mutableStateOf<Boolean?>(null) } // false = este pago · true = la serie
@@ -200,28 +202,46 @@ fun CompromisoDetalleScreen(onVolver: () -> Unit, onEditar: (Int) -> Unit, onEdi
             ) {
                 Text(c.descripcion, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                 Row { Insignia(c.estadoTexto, colorEstado(c.estadoVisual)) }
+                val p = c.presupuesto
                 Text(
-                    Formato.dinero(if (c.estado == "pendiente") c.saldoPendiente else c.monto),
-                    fontSize = 32.sp, fontWeight = FontWeight.Bold
+                    Formato.dinero(if (p != null) p.queda else if (c.estado == "pendiente") c.saldoPendiente else c.monto),
+                    fontSize = 32.sp, fontWeight = FontWeight.Bold, color = if ((p?.queda?.toDoubleOrNull() ?: 0.0) < 0) MaterialTheme.colorScheme.error else Color.Unspecified
                 )
-                Seccion("Detalle") {
+                // Presupuesto: no se paga; lo descuentan los gastos de su categoría, salgan de donde salgan
+                if (p != null) {
+                    Text(if ((p.queda.toDoubleOrNull() ?: 0.0) < 0) "Te pasaste del presupuesto" else "Te queda de presupuesto este ciclo", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Seccion("Presupuesto") {
+                        FilaValor("Presupuesto del ciclo", Formato.dinero(p.monto))
+                        FilaValor("Gastado", Formato.dinero(p.gastado))
+                        if ((p.comprometido.toDoubleOrNull() ?: 0.0) > 0) FilaValor("Por pagar (compromisos de la categoría)", Formato.dinero(p.comprometido))
+                        FilaValor("Queda", Formato.dinero(p.queda), negrita = true)
+                    }
+                    Seccion("Gastos que lo descuentan") {
+                        if (p.movimientos.isNullOrEmpty()) Text("Aún no hay gastos de esta categoría en el ciclo.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        p.movimientos?.forEach { m -> FilaValor("${Formato.fechaCorta(m.fecha)} · ${m.descripcion} (${m.origen})", Formato.dinero(m.monto)) }
+                    }
+                }
+                if (p == null) Seccion("Detalle") {
                     FilaValor("Monto", Formato.dinero(c.monto))
                     FilaValor("Pagado", Formato.dinero(c.montoPagado))
                     FilaValor("Pendiente", Formato.dinero(c.saldoPendiente), negrita = true)
+                    c.excedente?.takeIf { (it.toDoubleOrNull() ?: 0.0) > 0 }?.let { FilaValor("Pagado de más (crédito en la tarjeta)", Formato.dinero(it)) }
                     FilaValor("Fecha esperada", c.fechaEsperada?.let { Formato.fechaLarga(it) } ?: "Sin fecha")
                     c.numeroCuota?.let { FilaValor("Cuota", "$it" + (c.totalCuotas?.let { t -> " de $t" } ?: "")) }
-                    c.tarjeta?.let { FilaValor("Tarjeta", it.nombre ?: "") }
+                    c.tarjeta?.let { t -> FilaValor("Tarjeta", "${t.nombre ?: ""} ›", onClick = { onAbrirTarjeta(t.id) }) }
                     c.categoria?.let { FilaValor("Categoría", it.nombre) }
                     c.contacto?.let { FilaValor("Con", it.nombre) }
                     c.recurrente?.let { FilaValor("Se repite", it.descripcionFrecuencia ?: it.frecuencia) }
                     estado.comunes?.miembros?.firstOrNull { it.id == c.userId }?.let { FilaValor("Registrado por", it.nombre) }
                 }
                 c.comentario?.takeIf { it.isNotBlank() }?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                // El estado de cuenta de una tarjeta: su detalle está en la tarjeta
+                c.tarjeta?.let { t -> OutlinedButton(onClick = { onAbrirTarjeta(t.id) }, modifier = Modifier.fillMaxWidth()) { Text("Ver la tarjeta ${t.nombre ?: ""}") } }
                 if (!c.abonos.isNullOrEmpty()) Seccion("Pagos en efectivo") {
                     c.abonos.forEach { FilaValor("${Formato.fechaCorta(it.fecha)} · ${it.descripcion}", Formato.dinero(it.monto)) }
                 }
                 if (c.estado == "pendiente") {
-                    Button(onClick = viewModel::abrirPago, modifier = Modifier.fillMaxWidth()) { Text("Pagar") }
+                    if (c.esPresupuesto != true) Button(onClick = viewModel::abrirPago, modifier = Modifier.fillMaxWidth()) { Text("Pagar") }
                     if (c.tarjeta == null) OutlinedButton(onClick = { onEditar(c.id) }, modifier = Modifier.fillMaxWidth()) { Text("Editar este pago") }
                     OutlinedButton(onClick = { cancelar = false }, enabled = !estado.ocupado, modifier = Modifier.fillMaxWidth()) { Text("Cancelar este pago") }
                     if (c.recurrente != null) OutlinedButton(onClick = { onEditarSerie(c.id) }, modifier = Modifier.fillMaxWidth()) { Text("Editar la serie (${c.recurrente.descripcionFrecuencia ?: c.recurrente.frecuencia})") }
@@ -264,7 +284,12 @@ private fun FormularioPago(f: FormPago, c: Compromiso, comunes: Comunes?, vm: Co
                 label = { Text("Monto") }, prefix = { Text("$ ") }, singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 isError = f.errores["monto"] != null,
-                supportingText = { Text(f.errores["monto"] ?: "Pendiente: ${Formato.dinero(c.saldoPendiente)} (un monto menor es un abono)") },
+                supportingText = {
+                    // A una tarjeta se le puede pagar de más: el excedente queda como crédito en ella
+                    val deMas = (f.monto.toDoubleOrNull() ?: 0.0) - (c.saldoPendiente.toDoubleOrNull() ?: 0.0)
+                    Text(f.errores["monto"] ?: if (c.tarjeta != null && deMas > 0.004) "Pagas ${Formato.dinero(deMas)} de más: quedarán como crédito en la tarjeta (sube su disponible y baja el próximo corte)."
+                        else "Pendiente: ${Formato.dinero(c.saldoPendiente)} (un monto menor es un abono)")
+                },
                 modifier = Modifier.fillMaxWidth()
             )
             CampoFecha("Fecha", f.fecha, { vm.cambiarPago(f.copy(fecha = it)) }, desde = null, hasta = Formato.hoy(), error = f.errores["fecha"])

@@ -64,6 +64,9 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import com.carlosramos.misgastos.data.remote.dto.CargoFijo
+import com.carlosramos.misgastos.data.remote.dto.CargoFijoBody
+import com.carlosramos.misgastos.data.remote.dto.EstadoCuenta
 import com.carlosramos.misgastos.data.remote.dto.MovimientoTarjeta
 import com.carlosramos.misgastos.data.remote.dto.MovimientoTarjetaBody
 import com.carlosramos.misgastos.data.remote.dto.TarjetaDetalle
@@ -72,6 +75,9 @@ import com.carlosramos.misgastos.data.repository.FinanzasRepository
 import com.carlosramos.misgastos.data.repository.Resultado
 import com.carlosramos.misgastos.ui.common.Avatar
 import com.carlosramos.misgastos.ui.common.CampoFecha
+import com.carlosramos.misgastos.ui.common.CampoMonto
+import com.carlosramos.misgastos.ui.common.Confirmar
+import com.carlosramos.misgastos.ui.common.HojaFormulario
 import com.carlosramos.misgastos.ui.common.Cargando
 import com.carlosramos.misgastos.ui.common.Desplegable
 import com.carlosramos.misgastos.ui.common.ErrorConReintento
@@ -103,6 +109,29 @@ data class FormMovTarjeta(
     val error: String? = null
 )
 
+/** Cargo fijo (seguro, membresía…): desde = primer corte en el que se cobra. */
+data class FormCargoFijo(
+    val id: Int? = null,
+    val descripcion: String = "",
+    val monto: String = "",
+    val desde: String = Formato.hoy(),
+    val activo: Boolean = true,
+    val categoriaId: Int? = null,
+    val guardando: Boolean = false,
+    val errores: Map<String, String> = emptyMap(),
+    val error: String? = null
+)
+
+/** Intereses bonificables de un corte, tal como vienen en el estado de cuenta del banco. */
+data class FormIntereses(
+    val estadoId: Int,
+    val corte: String,
+    val monto: String,
+    val guardando: Boolean = false,
+    val errores: Map<String, String> = emptyMap(),
+    val error: String? = null
+)
+
 data class TarjetaEstado(
     val cargando: Boolean = true,
     val error: String? = null,
@@ -121,6 +150,10 @@ class TarjetaDetalleViewModel @Inject constructor(
     val estado = _estado.asStateFlow()
     private val _form = MutableStateFlow<FormMovTarjeta?>(null)
     val form = _form.asStateFlow()
+    private val _cargo = MutableStateFlow<FormCargoFijo?>(null)
+    val cargo = _cargo.asStateFlow()
+    private val _intereses = MutableStateFlow<FormIntereses?>(null)
+    val intereses = _intereses.asStateFlow()
 
     init { cargar() }
 
@@ -175,6 +208,66 @@ class TarjetaDetalleViewModel @Inject constructor(
         }
     }
 
+    // ----- Cargos fijos -----
+
+    fun abrirCargo(c: CargoFijo?) {
+        val corte = _estado.value.detalle?.periodoAbierto?.corte ?: Formato.hoy()
+        _cargo.value = c?.let { FormCargoFijo(it.id, it.descripcion, it.monto, it.desde, it.activo, it.categoriaId) } ?: FormCargoFijo(desde = corte)
+    }
+
+    fun cambiarCargo(f: FormCargoFijo) { _cargo.value = f }
+    fun cerrarCargo() { _cargo.value = null }
+
+    fun guardarCargo() {
+        val f = _cargo.value ?: return
+        val errores = buildMap {
+            if (f.descripcion.isBlank()) put("descripcion", "Escribe qué cobra (ej. Seguro).")
+            if (!Formato.montoValido(f.monto)) put("monto", "Monto positivo con máximo dos decimales.")
+        }
+        if (errores.isNotEmpty()) { _cargo.value = f.copy(errores = errores); return }
+        _cargo.value = f.copy(guardando = true, errores = emptyMap(), error = null)
+        viewModelScope.launch {
+            when (val r = repo.guardarCargoFijo(tarjetaId, f.id, CargoFijoBody(f.descripcion.trim(), f.monto, f.desde, f.activo, f.categoriaId))) {
+                is Resultado.Ok -> { _cargo.value = null; avisar(if (f.id == null) "Cargo fijo agregado: se sumará en cada corte." else "Cargo fijo actualizado."); cargar() }
+                is Resultado.Falla -> _cargo.value = f.copy(guardando = false, errores = r.campos, error = r.mensaje)
+            }
+        }
+    }
+
+    fun abrirIntereses(e: EstadoCuenta) {
+        val monto = e.interesesBonificables?.toDoubleOrNull()?.takeIf { it > 0 }?.let { "%.2f".format(java.util.Locale.US, it) } ?: ""
+        _intereses.value = FormIntereses(e.id, e.fechaCorte, monto)
+    }
+    fun cambiarIntereses(f: FormIntereses) { _intereses.value = f }
+    fun cerrarIntereses() { _intereses.value = null }
+
+    fun guardarIntereses() {
+        val f = _intereses.value ?: return
+        val monto = f.monto.trim().ifEmpty { "0" }
+        if (!Regex("""^\d+(\.\d{1,2})?$""").matches(monto)) {
+            _intereses.value = f.copy(errores = mapOf("intereses_bonificables" to "Monto de cero o más, con máximo dos decimales.")); return
+        }
+        _intereses.value = f.copy(guardando = true, errores = emptyMap(), error = null)
+        viewModelScope.launch {
+            when (val r = repo.guardarIntereses(tarjetaId, f.estadoId, monto)) {
+                is Resultado.Ok -> { _intereses.value = null; avisar("Intereses actualizados. Disponible: ${Formato.dinero(r.datos.disponible)}."); cargar() }
+                is Resultado.Falla -> _intereses.value = f.copy(guardando = false, errores = r.campos, error = r.mensaje)
+            }
+        }
+    }
+
+    fun eliminarCargo() {
+        val f = _cargo.value ?: return
+        val id = f.id ?: return
+        _cargo.value = f.copy(guardando = true)
+        viewModelScope.launch {
+            when (val r = repo.eliminarCargoFijo(tarjetaId, id)) {
+                is Resultado.Ok -> { _cargo.value = null; avisar("Cargo fijo eliminado: ya no se sumará en los próximos cortes."); cargar() }
+                is Resultado.Falla -> _cargo.value = f.copy(guardando = false, error = r.mensaje)
+            }
+        }
+    }
+
     fun eliminar() {
         val id = _form.value?.id ?: return
         _form.value = _form.value?.copy(guardando = true)
@@ -192,6 +285,9 @@ class TarjetaDetalleViewModel @Inject constructor(
 fun TarjetaDetalleScreen(onVolver: () -> Unit, onAbrirCompromiso: (Int) -> Unit, onEditar: (Int) -> Unit, viewModel: TarjetaDetalleViewModel = hiltViewModel()) {
     val estado by viewModel.estado.collectAsStateWithLifecycle()
     val form by viewModel.form.collectAsStateWithLifecycle()
+    val cargo by viewModel.cargo.collectAsStateWithLifecycle()
+    val intereses by viewModel.intereses.collectAsStateWithLifecycle()
+    var borrarCargo by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
     var avance by remember { mutableStateOf(false) }
     LaunchedEffect(estado.mensaje) { estado.mensaje?.let { snackbar.showSnackbar(it); viewModel.mensajeVisto() } }
@@ -240,6 +336,9 @@ fun TarjetaDetalleScreen(onVolver: () -> Unit, onAbrirCompromiso: (Int) -> Unit,
                         val cargos = d.cargosProximoCorte.toDoubleOrNull() ?: 0.0
                         FilaValor("Lleva acumulado", Formato.dinero((d.porFacturar.total.toDoubleOrNull() ?: 0.0) + cargos), negrita = true)
                         if (cargos > 0) Text("Incluye ${Formato.dinero(cargos)} de cargos fijos que se suman al cortar.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        d.porFacturar.saldoAFavor?.toDoubleOrNull()?.takeIf { it < 0 }?.let {
+                            Text("Incluye el saldo a favor del corte anterior (${Formato.dinero(-it)}).", style = MaterialTheme.typography.bodySmall, color = Semantica.ingreso)
+                        }
                         d.porFacturar.lineas.filter { it.cuotaNumero != null }.forEach {
                             FilaValor("${it.descripcion} (cuota ${it.cuotaNumero}/${it.cuotas})", Formato.dinero(it.monto))
                         }
@@ -260,12 +359,17 @@ fun TarjetaDetalleScreen(onVolver: () -> Unit, onAbrirCompromiso: (Int) -> Unit,
                         }
                     }
                 }
-                if (d.cargosFijos.isNotEmpty()) item {
+                if (d.cargosFijos.isNotEmpty() || d.tarjeta.activo) item {
                     Seccion("Cargos fijos") {
                         d.cargosFijos.forEach { c ->
-                            FilaValor("${c.descripcion}${if (c.activo) "" else " (inactivo)"} · cada corte", Formato.dinero(c.monto))
+                            Column(Modifier.fillMaxWidth().clickable { viewModel.abrirCargo(c) }.padding(vertical = 4.dp)) {
+                                FilaValor("${c.descripcion}${if (c.activo) "" else " (inactivo)"} · cada corte", Formato.dinero(c.monto))
+                            }
                         }
-                        Text("Se agregan solos a cada estado de cuenta. Se administran desde la web.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Seguro, membresía… se agregan solos a cada estado de cuenta, una vez por corte.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (d.tarjeta.activo) TextButton(onClick = { viewModel.abrirCargo(null) }) {
+                            Icon(Icons.Default.Add, contentDescription = null); Text("Agregar cargo fijo")
+                        }
                     }
                 }
                 item {
@@ -287,11 +391,13 @@ fun TarjetaDetalleScreen(onVolver: () -> Unit, onAbrirCompromiso: (Int) -> Unit,
                 }
                 if (d.estadosCuenta.isNotEmpty()) item {
                     Seccion("Estados de cuenta") {
-                        d.estadosCuenta.forEach { e ->
+                        d.estadosCuenta.forEachIndexed { i, e ->
                             Row(Modifier.fillMaxWidth().clickable(enabled = e.compromisoId != null) { e.compromisoId?.let(onAbrirCompromiso) }.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
                                     Text("Corte ${Formato.fechaCorta(e.fechaCorte)}", style = MaterialTheme.typography.bodyMedium)
                                     Text("Límite ${Formato.fechaCorta(e.fechaLimitePago)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    if ((e.total.toDoubleOrNull() ?: 0.0) < 0) Text("A favor: se descuenta del corte siguiente", style = MaterialTheme.typography.bodySmall, color = Semantica.ingreso)
+                                    else e.saldoAnterior?.toDoubleOrNull()?.takeIf { it < 0 }?.let { Text("Incluye ${Formato.dinero(-it)} a favor del corte anterior", style = MaterialTheme.typography.bodySmall, color = Semantica.ingreso) }
                                 }
                                 when (e.estado) {
                                     "pagado" -> Insignia("Pagado", Semantica.ingreso)
@@ -302,6 +408,14 @@ fun TarjetaDetalleScreen(onVolver: () -> Unit, onAbrirCompromiso: (Int) -> Unit,
                                 Spacer(Modifier.size(8.dp))
                                 Text(Formato.dinero(e.total), fontWeight = FontWeight.Medium)
                             }
+                            // Intereses bonificables: se anotan en el último corte (son los que el banco aparta del disponible)
+                            val bonificables = e.interesesBonificables?.toDoubleOrNull() ?: 0.0
+                            if (i == 0 && d.tarjeta.activo) TextButton(onClick = { viewModel.abrirIntereses(e) }, contentPadding = PaddingValues(0.dp)) {
+                                Text(
+                                    if (bonificables > 0) "Intereses bonificables: ${Formato.dinero(bonificables)} · cambiar" else "Anotar intereses bonificables",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            } else if (bonificables > 0) Text("Intereses bonificables: ${Formato.dinero(bonificables)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -309,6 +423,48 @@ fun TarjetaDetalleScreen(onVolver: () -> Unit, onAbrirCompromiso: (Int) -> Unit,
         }
     }
     form?.let { f -> estado.comunes?.let { c -> FormularioTarjeta(f, c, d?.periodoAbierto?.desde, viewModel) } }
+    cargo?.let { f ->
+        HojaFormulario(
+            titulo = if (f.id == null) "Nuevo cargo fijo" else "Editar cargo fijo", accion = "Guardar", guardando = f.guardando,
+            onCerrar = viewModel::cerrarCargo, onAccion = viewModel::guardarCargo, error = f.error?.takeIf { f.errores.isEmpty() },
+            extra = if (f.id != null) ({ OutlinedButton(onClick = { borrarCargo = true }, enabled = !f.guardando) { Text("Eliminar", color = MaterialTheme.colorScheme.error) } }) else null
+        ) {
+            OutlinedTextField(
+                value = f.descripcion, onValueChange = { viewModel.cambiarCargo(f.copy(descripcion = it)) }, label = { Text("¿Qué cobra?") },
+                placeholder = { Text("Ej: Seguro, membresía") }, singleLine = true,
+                isError = f.errores["descripcion"] != null, supportingText = f.errores["descripcion"]?.let { { Text(it) } }, modifier = Modifier.fillMaxWidth()
+            )
+            CampoMonto("Monto en cada corte", f.monto, { viewModel.cambiarCargo(f.copy(monto = it)) }, error = f.errores["monto"])
+            CampoFecha("Desde el corte del", f.desde, { viewModel.cambiarCargo(f.copy(desde = it)) }, desde = null, hasta = null, error = f.errores["desde"])
+            estado.comunes?.let { c ->
+                Desplegable(
+                    "Categoría (opcional)", listOf<Pair<Int?, String>>(null to "Sin categoría") + c.categoriasDe("egreso").map { it.id to it.nombre },
+                    f.categoriaId, { viewModel.cambiarCargo(f.copy(categoriaId = it)) }, error = f.errores["categoria_personal_id"]
+                )
+            }
+            if (f.id != null) Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Activo", modifier = Modifier.weight(1f))
+                androidx.compose.material3.Switch(checked = f.activo, onCheckedChange = { viewModel.cambiarCargo(f.copy(activo = it)) })
+            }
+            Text("Los cambios aplican desde el próximo corte; lo ya cobrado queda en sus estados de cuenta.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+    intereses?.let { f ->
+        HojaFormulario(
+            titulo = "Intereses bonificables · corte ${Formato.fechaCorta(f.corte)}", accion = "Guardar", guardando = f.guardando,
+            onCerrar = viewModel::cerrarIntereses, onAccion = viewModel::guardarIntereses, error = f.error?.takeIf { f.errores.isEmpty() }
+        ) {
+            CampoMonto("Intereses bonificables", f.monto, { viewModel.cambiarIntereses(f.copy(monto = it)) }, error = f.errores["intereses_bonificables"])
+            Text(
+                "Los trae tu estado de cuenta. El banco los aparta del disponible hasta el próximo corte, aunque ya hayas pagado. Si pagaste el total a tiempo, ahí te los devuelve; si no, te los cobra. Déjalo en 0 si tu banco no los aparta.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+    if (borrarCargo) Confirmar(
+        "¿Eliminar este cargo fijo?", "Ya no se sumará en los próximos cortes; lo ya cobrado queda en sus estados de cuenta.", "Eliminar",
+        onConfirmar = { borrarCargo = false; viewModel.eliminarCargo() }, onCancelar = { borrarCargo = false }
+    )
     if (avance) TransferenciaSheet(
         onCerrar = { avance = false }, onHecho = { avance = false; viewModel.avisar("Avance registrado."); viewModel.cargar() },
         origen = "tarjeta:${viewModel.tarjetaId}", destino = "efectivo"

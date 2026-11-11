@@ -120,6 +120,7 @@ fun InicioScreen(
                     )
                 }
                 item { Liquidez(d, onVerEfectivo) }
+                if (d.tope != null || !d.presupuestos.isNullOrEmpty()) item { GastoDelCiclo(d, onAbrirCompromiso) }
                 if (d.alertas.isNotEmpty()) item {
                     Seccion("Avisos") { d.alertas.forEach { FilaAlerta(it) } }
                 }
@@ -289,5 +290,50 @@ private fun GastosPorCategoria(d: Dashboard) {
                     }
                 }
             }
+    }
+}
+
+/** Termómetro del ciclo: el tope de gasto y cada presupuesto (súper, gasolina…). Ámbar al 80 %, rojo al pasarse. */
+@Composable
+private fun GastoDelCiclo(d: Dashboard, onAbrirCompromiso: (Int) -> Unit) {
+    val colorBarra = @Composable { usado: Double, monto: Double ->
+        when { usado > monto -> MaterialTheme.colorScheme.error; usado >= monto * 0.8 -> Semantica.aviso; else -> Semantica.ingreso }
+    }
+    val barra = @Composable { usado: Double, monto: Double, alto: Int ->
+        Box(Modifier.fillMaxWidth().height(alto.dp).clip(RoundedCornerShape(alto.dp)).background(MaterialTheme.colorScheme.surfaceVariant)) {
+            Box(Modifier.fillMaxHeight().fillMaxWidth(if (monto > 0) (usado / monto).toFloat().coerceIn(0.02f, 1f) else 0f).clip(RoundedCornerShape(alto.dp)).background(colorBarra(usado, monto)))
+        }
+    }
+    Seccion("Gasto del ciclo") {
+        d.tope?.let { t ->
+            Row {
+                Text("Llevas ${Formato.dinero(t.gastado)} de ${Formato.dinero(t.tope)}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                Text("${t.porcentaje} %", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+            }
+            Spacer(Modifier.height(4.dp))
+            barra(t.gastado, t.tope, 10)
+            Text(
+                if (t.queda < 0) "Te pasaste por ${Formato.dinero(-t.queda)}" else "Te quedan ${Formato.dinero(t.queda)} · ${Formato.dinero(t.porDia)} por día (${t.diasRestantes + 1} días)",
+                style = MaterialTheme.typography.bodySmall, color = if (t.queda < 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(8.dp))
+        }
+        d.presupuestos.orEmpty().forEach { p ->
+            Column(Modifier.fillMaxWidth().clickable { onAbrirCompromiso(p.id) }.padding(vertical = 5.dp)) {
+                Row {
+                    Text(p.descripcion, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    Text(
+                        if (p.queda < 0) "te pasaste ${Formato.dinero(-p.queda)}" else "quedan ${Formato.dinero(p.queda)}",
+                        style = MaterialTheme.typography.bodySmall, color = if (p.queda < 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(Modifier.height(3.dp))
+                barra(p.gastado + p.comprometido, p.monto, 6)
+                Text(
+                    "${Formato.dinero(p.gastado)} de ${Formato.dinero(p.monto)}" + if (p.comprometido > 0) " + ${Formato.dinero(p.comprometido)} por pagar" else "",
+                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
     }
 }

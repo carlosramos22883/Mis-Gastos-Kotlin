@@ -11,7 +11,8 @@ import kotlin.math.min
 
 /**
  * Prepara una foto elegida en el teléfono para subirla: la endereza (EXIF), recorta el centro en cuadrado
- * y la deja en 512 × 512 JPEG (igual que el recortador de la web; liviana y nítida en los círculos).
+ * y la deja en 512 × 512 JPEG (igual que el recortador de la web; liviana y nítida en los círculos), o solo la
+ * endereza y la reduce (fotos completas, como la cuenta de un restaurante).
  */
 object Imagen {
     fun paraSubir(context: Context, uri: Uri, lado: Int = 512): ByteArray? = runCatching {
@@ -29,5 +30,22 @@ object Imagen {
         val cuadrada = Bitmap.createBitmap(derecha, (derecha.width - tam) / 2, (derecha.height - tam) / 2, tam, tam)
         val final = Bitmap.createScaledBitmap(cuadrada, lado, lado, true)
         ByteArrayOutputStream().use { out -> final.compress(Bitmap.CompressFormat.JPEG, 88, out); out.toByteArray() }
+    }.getOrNull()
+
+    /** Foto completa (ej. la cuenta de un restaurante): enderezada y con su lado mayor en [maximo] px como máximo. */
+    fun reducida(context: Context, uri: Uri, maximo: Int = 1600): ByteArray? = runCatching {
+        val original = context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) } ?: return null
+        val grados = context.contentResolver.openInputStream(uri)?.use {
+            when (ExifInterface(it).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
+                ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+                ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+                ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+                else -> 0f
+            }
+        } ?: 0f
+        val escala = min(1f, maximo.toFloat() / maxOf(original.width, original.height))
+        val matriz = Matrix().apply { postRotate(grados); postScale(escala, escala) }
+        val final = Bitmap.createBitmap(original, 0, 0, original.width, original.height, matriz, true)
+        ByteArrayOutputStream().use { out -> final.compress(Bitmap.CompressFormat.JPEG, 85, out); out.toByteArray() }
     }.getOrNull()
 }

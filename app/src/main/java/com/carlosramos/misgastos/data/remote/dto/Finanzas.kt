@@ -50,7 +50,30 @@ data class Dashboard(
     @SerializedName("gastos_por_categoria") val gastosPorCategoria: List<GastoCategoria>,
     val historial: List<CicloHistorial>,
     val alertas: List<Alerta>,
-    val proximos: List<Proximo>
+    val proximos: List<Proximo>,
+    /** Tope de gasto del ciclo (null = sin tope) y presupuestos (súper, gasolina…) del ciclo */
+    val tope: TopeGasto? = null,
+    val presupuestos: List<PresupuestoResumen>? = null
+)
+
+data class TopeGasto(
+    val tope: Double,
+    val gastado: Double,
+    val queda: Double,
+    @SerializedName("por_dia") val porDia: Double,
+    val porcentaje: Int,
+    @SerializedName("dias_restantes") val diasRestantes: Int
+)
+
+/** queda < 0 = se pasó; comprometido = compromisos de su categoría aún por pagar (ya apartados) */
+data class PresupuestoResumen(
+    val id: Int,
+    val descripcion: String,
+    val color: String?,
+    val monto: Double,
+    val gastado: Double,
+    val comprometido: Double,
+    val queda: Double
 )
 
 data class CicloResumen(
@@ -186,14 +209,31 @@ data class Compromiso(
     val categoria: CategoriaMini?,
     val recurrente: Recurrente?,
     val tarjeta: TarjetaMini?,
-    val abonos: List<MovimientoEfectivo>? = null
+    /** Lo pagado de más a una tarjeta: quedó como crédito en ella. */
+    val excedente: String? = null,
+    val abonos: List<MovimientoEfectivo>? = null,
+    /** Presupuesto (súper, gasolina…): no se paga, se descuenta con los gastos de su categoría */
+    @SerializedName("es_presupuesto") val esPresupuesto: Boolean? = null,
+    val presupuesto: PresupuestoDetalle? = null
 )
+
+data class PresupuestoDetalle(
+    val monto: String,
+    val gastado: String,
+    val comprometido: String,
+    val queda: String,
+    val movimientos: List<MovimientoPresupuesto>? = null
+)
+
+/** Un gasto que descuenta el presupuesto; origen = de dónde salió (Efectivo, la cuenta o la tarjeta). */
+data class MovimientoPresupuesto(val clase: String, val id: Int, val fecha: String, val descripcion: String, val origen: String, val monto: String)
 
 data class Recurrente(
     val id: Int,
     val frecuencia: String,
     @SerializedName("descripcion_frecuencia") val descripcionFrecuencia: String?,
     val activo: Boolean,
+    @SerializedName("es_presupuesto") val esPresupuesto: Boolean? = null,
     val descripcion: String? = null,
     val monto: String? = null,
     @SerializedName("dia_semana") val diaSemana: Int? = null,
@@ -579,6 +619,11 @@ data class Tarjeta(
     @SerializedName("dia_pago") val diaPago: Int,
     val deuda: String,
     val disponible: String,
+    /** Intereses bonificables del último corte, ya restados del disponible (el banco los resuelve en el corte siguiente). */
+    @SerializedName("intereses_retenidos") val interesesRetenidos: String? = null,
+    /** false = el banco solo resta el capital (Davivienda): intereses, comisiones e IVA no bajan el disponible hasta pagarse. */
+    @SerializedName("cargos_restan_disponible") val cargosRestanDisponible: Boolean? = null,
+    @SerializedName("cargos_sin_restar") val cargosSinRestar: String? = null,
     @SerializedName("proximo_corte") val proximoCorte: String?,
     @SerializedName("por_pagar") val porPagar: PorPagarTarjeta?,
     val activo: Boolean
@@ -611,7 +656,8 @@ data class LineaPorFacturar(
     val monto: String
 )
 
-data class PorFacturar(val total: String, val lineas: List<LineaPorFacturar>)
+/** saldoAFavor (≤ 0): el último corte quedó a favor; ya va restado en total. */
+data class PorFacturar(val total: String, val lineas: List<LineaPorFacturar>, @SerializedName("saldo_a_favor") val saldoAFavor: String? = null)
 
 data class PeriodoAbierto(val desde: String, val corte: String?)
 
@@ -622,10 +668,16 @@ data class EstadoCuenta(
     @SerializedName("fecha_corte") val fechaCorte: String,
     @SerializedName("fecha_limite_pago") val fechaLimitePago: String?,
     val total: String,
+    /** ≤ 0: saldo a favor del corte anterior (ya va en total). */
+    @SerializedName("saldo_anterior") val saldoAnterior: String? = null,
+    /** Los trae el estado de cuenta del banco; los del último corte se apartan del disponible hasta el corte siguiente. */
+    @SerializedName("intereses_bonificables") val interesesBonificables: String? = null,
     @SerializedName("compromiso_id") val compromisoId: Int?,
     val estado: String?,
     @SerializedName("saldo_pendiente") val saldoPendiente: String?
 )
+
+data class InteresesBody(@SerializedName("intereses_bonificables") val interesesBonificables: String)
 
 data class CostoNoPagar(
     @SerializedName("interes_mes") val interesMes: Double,
@@ -649,7 +701,23 @@ data class TarjetaDetalle(
 )
 
 /** Lo que la tarjeta cobra en cada corte (seguro, membresía…); se agrega solo al estado de cuenta. */
-data class CargoFijo(val id: Int, val descripcion: String, val monto: String, val desde: String, val activo: Boolean)
+data class CargoFijo(
+    val id: Int,
+    val descripcion: String,
+    val monto: String,
+    val desde: String,
+    val activo: Boolean,
+    @SerializedName("categoria_personal_id") val categoriaId: Int? = null
+)
+
+/** desde: primer corte en el que se cobra (Y-m-d). */
+data class CargoFijoBody(
+    val descripcion: String,
+    val monto: String,
+    val desde: String,
+    val activo: Boolean,
+    @SerializedName("categoria_personal_id") val categoriaId: Int?
+)
 
 /** Un pago hecho a la tarjeta (clase: efectivo | cuenta | tarjeta). */
 data class PagoTarjeta(
@@ -696,7 +764,8 @@ data class CompromisoBody(
     @SerializedName("fecha_inicio") val fechaInicio: String? = null,
     val finalizacion: String? = null,
     @SerializedName("fecha_fin") val fechaFin: String? = null,
-    @SerializedName("total_cuotas") val totalCuotas: Int? = null
+    @SerializedName("total_cuotas") val totalCuotas: Int? = null,
+    @SerializedName("es_presupuesto") val esPresupuesto: Boolean? = null
 )
 
 // ---------- Alta y edición (los nulos no se envían: en la edición, lo que no viaja no cambia) ----------
@@ -725,6 +794,7 @@ data class TarjetaBody(
     @SerializedName("dia_pago") val diaPago: Int,
     val activo: Boolean,
     @SerializedName("permite_avances") val permiteAvances: Boolean,
+    @SerializedName("cargos_restan_disponible") val cargosRestanDisponible: Boolean,
     /** Solo al crear: disponible hoy y, si hay, el estado de cuenta pendiente */
     val disponible: String?,
     @SerializedName("tiene_pendiente") val tienePendiente: Boolean?,
@@ -759,7 +829,17 @@ data class PrestamoBody(
     @SerializedName("user_id") val userId: Int?
 )
 
-/** Sin "conceptos": la plantilla de descuentos se mantiene (se edita en la web). */
+/** Un concepto de la plantilla: monto fijo o porcentaje del bruto (con tope opcional); prestamo_id = se registra como pago de ese préstamo. */
+data class ConceptoBody(
+    val nombre: String,
+    val tipo: String,
+    val monto: String?,
+    val porcentaje: String?,
+    val tope: String?,
+    @SerializedName("prestamo_id") val prestamoId: Int?
+)
+
+/** conceptos == null: la plantilla se mantiene; una lista (aun vacía) la reemplaza completa. */
 data class FuenteBody(
     val nombre: String,
     @SerializedName("tipo_ingreso_id") val tipoIngresoId: Int,
@@ -771,7 +851,8 @@ data class FuenteBody(
     val destino: String,
     val color: String?,
     val activo: Boolean,
-    @SerializedName("user_id") val userId: Int?
+    @SerializedName("user_id") val userId: Int?,
+    val conceptos: List<ConceptoBody>? = null
 )
 
 // ---------- Perfil y categorías ----------

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Carpetas que se pueden compartir con otras apps: los reportes descargados y la imagen de un evento -->
+<paths>
+    <cache-path name="reportes" path="reportes/" />
+    <cache-path name="eventos" path="eventos/" />
+</paths>

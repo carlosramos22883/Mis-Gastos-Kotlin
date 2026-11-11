@@ -150,6 +150,7 @@ data class FormTarjeta(
     val diaPago: String = "",
     val activo: Boolean = true,
     val avances: Boolean = true,
+    val cargosRestan: Boolean = true,
     val disponible: String = "",
     val tienePendiente: Boolean = false,
     val pendienteMonto: String = "",
@@ -171,7 +172,8 @@ class TarjetaFormViewModel @Inject constructor(private val repo: FinanzasReposit
             if (id != 0) (repo.tarjeta(id) as? Resultado.Ok)?.datos?.tarjeta?.let { t ->
                 f = FormTarjeta(
                     t.id, t.nombre, t.banco?.id, t.marca?.id, t.ultimosDigitos.orEmpty(), t.color ?: f.color, t.limite,
-                    t.tasaInteres.orEmpty(), t.diaCorte.toString(), t.diaPago.toString(), t.activo, t.permiteAvances, userId = t.userId
+                    t.tasaInteres.orEmpty(), t.diaCorte.toString(), t.diaPago.toString(), t.activo, t.permiteAvances,
+                    cargosRestan = t.cargosRestanDisponible ?: true, userId = t.userId
                 )
             }
             _e.value = EstadoForm(cargando = false, catalogos = cat, comunes = comunes, form = f)
@@ -201,7 +203,7 @@ class TarjetaFormViewModel @Inject constructor(private val repo: FinanzasReposit
             val nueva = f.id == null
             val body = TarjetaBody(
                 f.nombre.trim(), f.bancoId, f.marcaId, f.digitos.ifBlank { null }, f.color, f.limite, f.tasa.ifBlank { null },
-                f.diaCorte.toInt(), f.diaPago.toInt(), f.activo, f.avances,
+                f.diaCorte.toInt(), f.diaPago.toInt(), f.activo, f.avances, f.cargosRestan,
                 disponible = f.disponible.takeIf { nueva }, tienePendiente = f.tienePendiente.takeIf { nueva },
                 pendienteMonto = f.pendienteMonto.takeIf { nueva && f.tienePendiente }, pendienteFecha = f.pendienteFecha.takeIf { nueva && f.tienePendiente },
                 userId = f.userId
@@ -262,6 +264,10 @@ fun TarjetaFormScreen(onListo: (eliminado: Boolean) -> Unit, onVolver: () -> Uni
         }
         SelectorColor(f.color) { viewModel.cambiar(f.copy(color = it)) }
         FilaInterruptor("Permite avances de efectivo", f.avances, { viewModel.cambiar(f.copy(avances = it)) }, "Para recargar Chivo, Niu o retirar")
+        FilaInterruptor(
+            "Los cargos del banco restan del disponible", f.cargosRestan, { viewModel.cambiar(f.copy(cargosRestan = it)) },
+            "Apágalo si el banco solo resta el capital (Davivienda): intereses, comisiones e IVA bajan el disponible al pagarlos"
+        )
         if (f.id != null) FilaInterruptor("Activa", f.activo, { viewModel.cambiar(f.copy(activo = it)) })
     }
 }
