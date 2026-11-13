@@ -7,7 +7,7 @@ import org.junit.Test
 class CalculoEventoTest {
     private val personas = listOf("Rocio", "Juan Carlos", "Sergio", "Ever", "Eduardo", "Samuel", "Charlie", "Joel", "Alvarenga", "Mayra")
     private fun producto(uid: Int, precio: String, vararg quienes: String) =
-        FilaProducto(uid, "p$uid", precio, quienes.associate { personas.indexOf(it) to "1" })
+        FilaProducto(uid, "p$uid", precio, cant = quienes.associate { personas.indexOf(it) to "1" })
 
     /** La cuenta de la hoja de cálculo del autor: cuadra en $102.91 y Rocío (cumpleañera) no paga. */
     @Test
@@ -28,8 +28,22 @@ class CalculoEventoTest {
     @Test
     fun propinaFijaDivididaEntreTodos() {
         val filas = listOf(FilaParticipante(1, "a"), FilaParticipante(2, "b"), FilaParticipante(3, "c"))
-        val productos = listOf(FilaProducto(5, "Refresco", "1.00", mapOf(1 to "1", 2 to "1", 3 to "1")), FilaProducto(6, "Nachos", "6.00", mapOf(1 to "1")))
+        val productos = listOf(FilaProducto(5, "Refresco", "1.00", cant = mapOf(1 to "1", 2 to "1", 3 to "1")), FilaProducto(6, "Nachos", "6.00", cant = mapOf(1 to "1")))
         val r = CalculoEvento.calcular(filas, productos, "monto", "1")
         assertEquals(listOf(734L, 133L, 133L), listOf(1, 2, 3).map { r.por.getValue(it).total })
+    }
+
+    /** Una bandeja de $55 compartida (igual que el servidor): 18.34 + 18.33 + 18.33; con porciones, Ana comió el doble. */
+    @Test
+    fun productoCompartido() {
+        val filas = listOf(FilaParticipante(1, "yo"), FilaParticipante(2, "Ana"), FilaParticipante(3, "Beto"))
+        val bandeja = FilaProducto(5, "Bandeja", "55.00", compartido = true, cant = mapOf(1 to "1", 2 to "1", 3 to "1"))
+        val refresco = FilaProducto(6, "Refresco", "1.50", cant = mapOf(1 to "1", 2 to "2"))
+        val r = CalculoEvento.calcular(filas, listOf(bandeja, refresco), "ninguna", "")
+        assertEquals(listOf(1984L, 2133L, 1833L), listOf(1, 2, 3).map { r.por.getValue(it).total })
+        assertEquals(5950L, r.total)
+
+        val dobles = CalculoEvento.calcular(filas, listOf(bandeja.copy(cant = mapOf(1 to "1", 2 to "2", 3 to "1"))), "porcentaje", "10")
+        assertEquals(listOf(1513L, 3025L, 1512L), listOf(1, 2, 3).map { dobles.por.getValue(it).total })
     }
 }

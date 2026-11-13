@@ -56,9 +56,10 @@ data class ParticipanteEvento(
 
 data class CobroEvento(val id: Int, val fecha: String, val monto: String, val destino: String?)
 
-data class DetalleEvento(val descripcion: String, val cantidad: Int, val precio: String, val monto: String)
+data class DetalleEvento(val descripcion: String, val cantidad: Int, val precio: String, val monto: String, val compartido: Boolean = false)
 
-data class ConsumoEvento(val id: Int, val descripcion: String, val precio: String, val cantidad: Int, val total: String, val cantidades: List<Int>)
+/** compartido: el precio es el del producto completo y se divide entre quienes comieron según sus porciones (cantidades). montos: lo de cada participante. */
+data class ConsumoEvento(val id: Int, val descripcion: String, val precio: String, val compartido: Boolean = false, val cantidad: Int, val total: String, val cantidades: List<Int>, val montos: List<String> = emptyList())
 
 data class OpcionEvento(val valor: String, val etiqueta: String)
 
@@ -67,8 +68,8 @@ data class OpcionesEvento(val participantes: List<OpcionEvento>, val origenes: L
 
 data class ParticipanteEventoBody(val quien: String, @SerializedName("es_festejado") val esFestejado: Boolean)
 
-/** cantidades: cuántos pidió cada participante, en el orden de participantes. */
-data class ConsumoEventoBody(val descripcion: String, val precio: String, val cantidades: List<Int>)
+/** cantidades: cuántos pidió cada participante, en el orden de participantes (si es compartido, sus porciones; el precio es el del producto completo). */
+data class ConsumoEventoBody(val descripcion: String, val precio: String, val compartido: Boolean, val cantidades: List<Int>)
 
 data class EventoBody(
     val nombre: String,

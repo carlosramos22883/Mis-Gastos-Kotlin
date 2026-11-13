@@ -300,7 +300,9 @@ fun EventoDetalleScreen(onVolver: () -> Unit, onEditar: (Int) -> Unit, onElimina
                 items(e.participantes, key = { it.id }) { p -> TarjetaParticipante(e, p, viewModel::abrirCobro, viewModel::abrirPagado, onAbrirContacto) { quitar = p } }
                 item {
                     Seccion("Consumos") {
-                        e.consumos.forEach { c -> FilaValor("${c.cantidad} × ${c.descripcion} (${Formato.dinero(c.precio)})", Formato.dinero(c.total)) }
+                        e.consumos.forEach { c ->
+                            FilaValor(if (c.compartido) "${c.descripcion} (compartido entre ${c.cantidades.count { it > 0 }})" else "${c.cantidad} × ${c.descripcion} (${Formato.dinero(c.precio)})", Formato.dinero(c.total))
+                        }
                     }
                 }
                 e.fotoUrl?.let { url ->
@@ -341,7 +343,7 @@ private fun TarjetaParticipante(e: Evento, p: ParticipanteEvento, onCobrar: (Par
                 if (p.estado == "parcial") { Spacer(Modifier.width(8.dp)); Text("falta ${Formato.dinero(p.pendiente)}", style = MaterialTheme.typography.bodySmall) }
             }
             if (abierto) {
-                p.detalle.forEach { d -> FilaValor("${if (d.cantidad > 1) "${d.cantidad}× " else ""}${d.descripcion}", Formato.dinero(d.monto)) }
+                p.detalle.forEach { d -> FilaValor(if (d.compartido) "${d.descripcion} (compartido)" else "${if (d.cantidad > 1) "${d.cantidad}× " else ""}${d.descripcion}", Formato.dinero(d.monto)) }
                 if (p.propina.num() > 0) FilaValor("Propina", Formato.dinero(p.propina))
                 if (p.festejo.num() > 0) FilaValor("Lo del cumpleañero", Formato.dinero(p.festejo))
                 p.cobros.forEach { c -> FilaValor("Cobro del ${Formato.fechaCorta(c.fecha)}", Formato.dinero(c.monto), colorValor = Semantica.ingreso) }

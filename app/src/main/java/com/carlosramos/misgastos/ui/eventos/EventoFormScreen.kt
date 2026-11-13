@@ -62,6 +62,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -95,8 +96,11 @@ private const val NUEVO = "__nuevo"
 
 data class FilaParticipante(val uid: Int, val quien: String?, val nuevo: String = "", val festejado: Boolean = false)
 
-/** Un producto (columna de la tabla) con su precio; cant = cuántos pidió cada participante (uid → texto). */
-data class FilaProducto(val uid: Int, val descripcion: String = "", val precio: String = "", val cant: Map<Int, String> = emptyMap()) {
+/**
+ * Un producto (columna de la tabla) con su precio; cant = cuántos pidió cada participante (uid → texto). Si es
+ * compartido (ej. una bandeja para todos), el precio es el del producto completo y cant son las porciones de cada uno.
+ */
+data class FilaProducto(val uid: Int, val descripcion: String = "", val precio: String = "", val compartido: Boolean = false, val cant: Map<Int, String> = emptyMap()) {
     fun cantidad(uid: Int) = cant[uid]?.toIntOrNull()?.coerceAtLeast(0) ?: 0
 }
 
@@ -122,10 +126,18 @@ object CalculoEvento {
         return partes
     }
 
+    /** Centavos de un producto para cada participante: cantidad × precio, o si es compartido su precio dividido según las porciones. */
+    fun montos(producto: FilaProducto, uids: List<Int>): Map<Int, Long> {
+        val precio = ((producto.precio.toDoubleOrNull() ?: 0.0) * 100).roundToLong()
+        val cantidades = uids.associateWith { producto.cantidad(it) }.filterValues { it > 0 }
+        return if (producto.compartido) repartir(precio, cantidades.mapValues { it.value.toDouble() }) else cantidades.mapValues { it.value * precio }
+    }
+
     /** Propina: porcentaje del consumo de cada uno o un monto fijo dividido entre todos. Lo de los festejados se reparte entre los demás. */
     fun calcular(participantes: List<FilaParticipante>, productos: List<FilaProducto>, propinaTipo: String, propinaValor: String): Reparto {
         val uids = participantes.map { it.uid }
-        val consumo = uids.associateWith { u -> productos.sumOf { p -> p.cantidad(u) * ((p.precio.toDoubleOrNull() ?: 0.0) * 100).roundToLong() } }
+        val celdas = productos.map { montos(it, uids) }
+        val consumo = uids.associateWith { u -> celdas.sumOf { it[u] ?: 0L } }
         val subtotal = consumo.values.sum()
         val valor = propinaValor.toDoubleOrNull() ?: 0.0
         val (propina, exactas) = when (propinaTipo) {
@@ -197,7 +209,7 @@ class EventoFormViewModel @Inject constructor(private val repo: FinanzasReposito
             base.copy(
                 nombre = e.nombre, fecha = e.fecha, lugar = e.lugar.orEmpty(),
                 participantes = e.participantes.map { FilaParticipante(it.id, it.quien, festejado = it.esFestejado) }, pagador = e.pagador?.id,
-                productos = e.consumos.map { c -> FilaProducto(-c.id, c.descripcion, c.precio, uids.zip(c.cantidades).filter { it.second > 0 }.associate { (u, n) -> u to n.toString() }) },
+                productos = e.consumos.map { c -> FilaProducto(-c.id, c.descripcion, c.precio, c.compartido, uids.zip(c.cantidades).filter { it.second > 0 }.associate { (u, n) -> u to n.toString() }) },
                 propinaTipo = e.propinaTipo, propinaValor = if (e.propinaTipo == "ninguna") "" else e.propinaValor,
                 origen = e.origenValor ?: base.origen, categoriaId = e.categoriaId, fotoUrl = e.fotoUrl
             )
@@ -214,6 +226,15 @@ class EventoFormViewModel @Inject constructor(private val repo: FinanzasReposito
     fun agregarProducto() = cambiar { it.copy(productos = it.productos + FilaProducto(siguiente++)) }
     fun quitarProducto(uid: Int) = cambiar { e -> e.copy(productos = e.productos.filter { it.uid != uid }) }
     fun producto(c: FilaProducto) = cambiar { e -> e.copy(productos = e.productos.map { if (it.uid == c.uid) c else it }) }
+    /** Marca o desmarca un producto como compartido; al marcarlo sin porciones, todos comieron (una cada uno). */
+    fun compartido(uid: Int, valor: Boolean) = cambiar { e ->
+        e.copy(productos = e.productos.map { c ->
+            if (c.uid != uid) c
+            else if (valor && e.participantes.none { c.cantidad(it.uid) > 0 }) c.copy(compartido = true, cant = e.participantes.associate { it.uid to "1" })
+            else c.copy(compartido = valor)
+        })
+    }
+    fun todosComieron(uid: Int) = cambiar { e -> e.copy(productos = e.productos.map { if (it.uid == uid) it.copy(cant = e.participantes.associate { p -> p.uid to "1" }) else it }) }
     fun cantidad(producto: Int, persona: Int, texto: String) = cambiar { e ->
         e.copy(productos = e.productos.map { if (it.uid == producto) it.copy(cant = it.cant + (persona to texto.filter(Char::isDigit).take(3))) else it })
     }
@@ -226,7 +247,9 @@ class EventoFormViewModel @Inject constructor(private val repo: FinanzasReposito
             if (e.participantes.isNotEmpty() && e.participantes.all { it.festejado }) put("participantes", "Al menos una persona debe pagar: no pueden ser todos festejados.")
             if (e.productos.isEmpty()) put("consumos", "Agrega al menos un producto.")
             e.productos.firstOrNull { it.descripcion.isBlank() || !Formato.montoValido(it.precio) }?.let { put("consumos", "Cada producto necesita nombre y precio.") }
-            e.productos.firstOrNull { p -> e.participantes.sumOf { p.cantidad(it.uid) } == 0 }?.let { put("consumos", "Nadie pidió «${it.descripcion}»: anota cuántos pidió cada uno o quítalo.") }
+            e.productos.firstOrNull { p -> e.participantes.sumOf { p.cantidad(it.uid) } == 0 }?.let {
+                put("consumos", if (it.compartido) "Nadie comió de «${it.descripcion}»: marca a quienes lo compartieron o quítalo." else "Nadie pidió «${it.descripcion}»: anota cuántos pidió cada uno o quítalo.")
+            }
             if (e.propinaTipo != "ninguna" && e.propinaValor.toDoubleOrNull() == null) put("propina_valor", "Escribe la propina.")
             if (e.pagaElHogar && e.origen != "ninguno" && e.categoriaId == null) put("categoria_personal_id", "Elige la categoría del gasto.")
         }
@@ -237,7 +260,7 @@ class EventoFormViewModel @Inject constructor(private val repo: FinanzasReposito
             propinaTipo = e.propinaTipo, propinaValor = if (e.propinaTipo == "ninguna") null else e.propinaValor,
             participantes = e.participantes.map { ParticipanteEventoBody(quien(it), it.festejado) },
             pagador = posicion.indexOf(e.pagador).coerceAtLeast(0),
-            consumos = e.productos.map { c -> ConsumoEventoBody(c.descripcion.trim(), c.precio, posicion.map { c.cantidad(it) }) },
+            consumos = e.productos.map { c -> ConsumoEventoBody(c.descripcion.trim(), c.precio, c.compartido, posicion.map { c.cantidad(it) }) },
             origen = if (e.pagaElHogar) e.origen else null, categoriaId = if (e.pagaElHogar && e.origen != "ninguno") e.categoriaId else null,
             confirmar = if (confirmado) true else null
         )
@@ -338,10 +361,17 @@ fun EventoFormScreen(onListo: (Int) -> Unit, onVolver: () -> Unit, viewModel: Ev
                 e.productos.forEach { c ->
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedTextField(c.descripcion, { viewModel.producto(c.copy(descripcion = it)) }, label = { Text("Producto") }, singleLine = true, modifier = Modifier.weight(1.4f))
-                        CampoMonto("Precio", c.precio, { viewModel.producto(c.copy(precio = it)) }, Modifier.weight(1f))
+                        CampoMonto(if (c.compartido) "Precio total" else "Precio", c.precio, { viewModel.producto(c.copy(precio = it)) }, Modifier.weight(1f))
                         if (e.productos.size > 1) IconButton(onClick = { viewModel.quitarProducto(c.uid) }) { Icon(Icons.Default.Close, contentDescription = "Quitar") }
                     }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(c.compartido, { viewModel.compartido(c.uid, it) })
+                        Text("Compartido (se divide entre quienes comieron)", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                        if (c.compartido) TextButton(onClick = { viewModel.todosComieron(c.uid) }) { Text("Todos") }
+                    }
                 }
+                Text("Si comieron de un mismo plato (ej. una bandeja), márcalo como compartido: pon su precio total y un 1 a cada quien comió (2 si comió el doble).",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
 
             // Como la hoja: una fila por persona, una columna por producto; en cada celda, cuántos pidió
@@ -358,9 +388,10 @@ fun EventoFormScreen(onListo: (Int) -> Unit, onVolver: () -> Unit, viewModel: Ev
                             Column(Modifier.width(ANCHO_PRODUCTO)) {
                                 Column(Modifier.height(ALTO_FILA + 8.dp).padding(horizontal = 4.dp), verticalArrangement = Arrangement.Bottom) {
                                     Text(c.descripcion.ifBlank { "Producto" }, style = MaterialTheme.typography.labelSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                    Text(Formato.dinero(c.precio), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(Formato.dinero(c.precio) + if (c.compartido) " ÷" else "", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
-                                e.participantes.forEach { p -> CeldaCantidad(c.cant[p.uid].orEmpty()) { viewModel.cantidad(c.uid, p.uid, it) } }
+                                val montos = if (c.compartido) CalculoEvento.montos(c, e.participantes.map { it.uid }) else emptyMap()
+                                e.participantes.forEach { p -> CeldaCantidad(c.cant[p.uid].orEmpty(), montos[p.uid]?.let { Formato.dinero(it / 100.0) }) { viewModel.cantidad(c.uid, p.uid, it) } }
                                 CeldaTexto(e.participantes.sumOf { c.cantidad(it.uid) }.takeIf { it > 0 }?.toString() ?: "", ANCHO_PRODUCTO, negrita = true)
                             }
                         }
@@ -418,14 +449,16 @@ private fun CeldaTexto(texto: String, ancho: Dp, alineado: TextAlign = TextAlign
 
 /** Celda de cantidad: un número pequeño, centrado. */
 @Composable
-private fun CeldaCantidad(valor: String, onCambio: (String) -> Unit) {
+private fun CeldaCantidad(valor: String, monto: String? = null, onCambio: (String) -> Unit) {
     Box(Modifier.width(ANCHO_PRODUCTO).height(ALTO_FILA).padding(4.dp), contentAlignment = Alignment.Center) {
         BasicTextField(
             value = valor, onValueChange = onCambio, singleLine = true,
             textStyle = TextStyle(textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurface, fontSize = MaterialTheme.typography.bodyMedium.fontSize),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            modifier = Modifier.fillMaxSize().border(BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), RoundedCornerShape(6.dp)).padding(top = 10.dp)
+            modifier = Modifier.fillMaxSize().border(BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), RoundedCornerShape(6.dp)).padding(top = if (monto != null) 2.dp else 10.dp)
         )
+        // Producto compartido: lo que le toca de él
+        if (monto != null) Text(monto, style = MaterialTheme.typography.labelSmall, fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 2.dp))
     }
 }
 

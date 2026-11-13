@@ -218,7 +218,14 @@ fun CompromisoDetalleScreen(onVolver: () -> Unit, onEditar: (Int) -> Unit, onEdi
                     }
                     Seccion("Gastos que lo descuentan") {
                         if (p.movimientos.isNullOrEmpty()) Text("Aún no hay gastos de esta categoría en el ciclo.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        p.movimientos?.forEach { m -> FilaValor("${Formato.fechaCorta(m.fecha)} · ${m.descripcion} (${m.origen})", Formato.dinero(m.monto)) }
+                        p.movimientos?.forEach { m ->
+                            FilaValor("${Formato.fechaCorta(m.fecha)} · ${m.descripcion} (${m.origen})", Formato.dinero(m.monto))
+                            m.cobrado?.let { cobrado ->
+                                val original = (m.monto.toDoubleOrNull() ?: 0.0) + (cobrado.toDoubleOrNull() ?: 0.0)
+                                Text("De ${Formato.dinero(original)}: ${Formato.dinero(cobrado)} ya te pagaron", style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
                     }
                 }
                 if (p == null) Seccion("Detalle") {

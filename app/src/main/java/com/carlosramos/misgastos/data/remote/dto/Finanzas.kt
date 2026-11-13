@@ -226,7 +226,8 @@ data class PresupuestoDetalle(
 )
 
 /** Un gasto que descuenta el presupuesto; origen = de dónde salió (Efectivo, la cuenta o la tarjeta). */
-data class MovimientoPresupuesto(val clase: String, val id: Int, val fecha: String, val descripcion: String, val origen: String, val monto: String)
+/** cobrado: si es el pago de un evento, lo que ya pagaron los contactos (monto ya viene sin eso). */
+data class MovimientoPresupuesto(val clase: String, val id: Int, val fecha: String, val descripcion: String, val origen: String, val monto: String, val cobrado: String? = null)
 
 data class Recurrente(
     val id: Int,
