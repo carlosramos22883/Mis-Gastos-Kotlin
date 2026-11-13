@@ -173,7 +173,10 @@ data class MovimientoEfectivoBody(
     val fecha: String,
     @SerializedName("categoria_personal_id") val categoriaId: Int?,
     @SerializedName("user_id") val userId: Int?,
-    @SerializedName("contacto_id") val contactoId: String?
+    @SerializedName("contacto_id") val contactoId: String?,
+    /** revisar | pasarme | cubrir (con traspasos): ver ExcesoPresupuesto */
+    val presupuesto: String? = null,
+    val traspasos: List<TraspasoBody>? = null
 )
 
 // ---------- Categorías (/api/categorias) ----------
@@ -217,13 +220,52 @@ data class Compromiso(
     val presupuesto: PresupuestoDetalle? = null
 )
 
+/** monto = monto_base + recibido − cedido (presupuesto movido entre categorías en el ciclo). */
 data class PresupuestoDetalle(
     val monto: String,
     val gastado: String,
     val comprometido: String,
     val queda: String,
-    val movimientos: List<MovimientoPresupuesto>? = null
+    @SerializedName("monto_base") val montoBase: String? = null,
+    val recibido: String? = null,
+    val cedido: String? = null,
+    val movimientos: List<MovimientoPresupuesto>? = null,
+    val traspasos: List<TraspasoPresupuesto>? = null
 )
+
+/** Presupuesto movido: recibe = llegó a este (si no, salió de este hacia [categoria]); manual = movido a mano (se puede deshacer). */
+data class TraspasoPresupuesto(
+    val id: Int, val recibe: Boolean, val categoria: String?, val monto: String, val manual: Boolean, val gasto: String?, val fecha: String
+)
+
+/**
+ * Un gasto que pasa su presupuesto (o un presupuesto que ya se pasó): cuánto y de qué otras categorías se puede cubrir.
+ * También para repartir lo que le queda a un presupuesto: disponible = lo que le queda; opciones = a cuáles pasarlo
+ * (con lo que les queda ahora); queda, gasto y excedente vienen vacíos.
+ */
+data class ExcesoPresupuesto(
+    val mensaje: String,
+    @SerializedName("presupuesto_id") val presupuestoId: Int,
+    val categoria: String,
+    val queda: String? = null,
+    val gasto: String? = null,
+    val excedente: String? = null,
+    val disponible: String,
+    val alcanza: Boolean? = null,
+    val opciones: List<OpcionPresupuesto>
+)
+
+data class OpcionPresupuesto(
+    @SerializedName("presupuesto_id") val presupuestoId: Int,
+    val categoria: String,
+    val color: String?,
+    val disponible: String
+)
+
+/** Cuánto se le quita a una categoría para cubrir lo que se pasa otra. */
+data class TraspasoBody(@SerializedName("presupuesto_id") val presupuestoId: Int, val monto: String)
+
+data class CubrirBody(val traspasos: List<TraspasoBody>)
 
 /** Un gasto que descuenta el presupuesto; origen = de dónde salió (Efectivo, la cuenta o la tarjeta). */
 /** cobrado: si es el pago de un evento, lo que ya pagaron los contactos (monto ya viene sin eso). */
@@ -582,7 +624,10 @@ data class MovimientoCuentaBody(
     val fecha: String,
     @SerializedName("categoria_personal_id") val categoriaId: Int?,
     @SerializedName("user_id") val userId: Int?,
-    @SerializedName("contacto_id") val contactoId: String?
+    @SerializedName("contacto_id") val contactoId: String?,
+    /** revisar | pasarme | cubrir (con traspasos): ver ExcesoPresupuesto */
+    val presupuesto: String? = null,
+    val traspasos: List<TraspasoBody>? = null
 )
 
 // ---------- Transferencias (/api/transferencias) ----------
@@ -741,7 +786,9 @@ data class MovimientoTarjetaBody(
     @SerializedName("categoria_personal_id") val categoriaId: Int?,
     val comentario: String?,
     @SerializedName("user_id") val userId: Int?,
-    @SerializedName("contacto_id") val contactoId: String?
+    @SerializedName("contacto_id") val contactoId: String?,
+    val presupuesto: String? = null,
+    val traspasos: List<TraspasoBody>? = null
 )
 
 /**

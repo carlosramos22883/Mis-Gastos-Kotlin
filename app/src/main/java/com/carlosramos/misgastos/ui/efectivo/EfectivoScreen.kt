@@ -115,8 +115,8 @@ fun EfectivoScreen(viewModel: EfectivoViewModel = hiltViewModel()) {
     form?.let { f ->
         estado.comunes?.let { c ->
             FormularioMovimiento(
-                f, c, estado.ciclo?.inicio, onCambiar = viewModel::cambiar, onGuardar = viewModel::guardar,
-                onEliminar = viewModel::eliminar, onCerrar = viewModel::cerrarForm
+                f, c, estado.ciclo?.inicio, onCambiar = viewModel::cambiar, onGuardar = { viewModel.guardar() },
+                onEliminar = viewModel::eliminar, onCerrar = viewModel::cerrarForm, onPresupuesto = { viewModel.guardar(it) }
             )
         }
     }

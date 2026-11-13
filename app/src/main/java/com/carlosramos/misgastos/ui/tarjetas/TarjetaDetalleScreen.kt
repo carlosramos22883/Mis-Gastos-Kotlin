@@ -82,6 +82,8 @@ import com.carlosramos.misgastos.ui.common.Cargando
 import com.carlosramos.misgastos.ui.common.Desplegable
 import com.carlosramos.misgastos.ui.common.ErrorConReintento
 import com.carlosramos.misgastos.ui.common.FilaValor
+import com.carlosramos.misgastos.ui.common.DecisionPresupuesto
+import com.carlosramos.misgastos.ui.common.DialogoCubrirPresupuesto
 import com.carlosramos.misgastos.ui.common.Formato
 import com.carlosramos.misgastos.ui.common.Insignia
 import com.carlosramos.misgastos.ui.common.Seccion
@@ -106,7 +108,8 @@ data class FormMovTarjeta(
     val contactoId: Int? = null,
     val guardando: Boolean = false,
     val errores: Map<String, String> = emptyMap(),
-    val error: String? = null
+    val error: String? = null,
+    val exceso: com.carlosramos.misgastos.data.remote.dto.ExcesoPresupuesto? = null
 )
 
 /** Cargo fijo (seguro, membresía…): desde = primer corte en el que se cobra. */
@@ -186,7 +189,7 @@ class TarjetaDetalleViewModel @Inject constructor(
     fun cambiar(f: FormMovTarjeta) { _form.value = f }
     fun cerrarForm() { _form.value = null }
 
-    fun guardar() {
+    fun guardar(decision: DecisionPresupuesto? = null) {
         val f = _form.value ?: return
         val cuotas = f.cuotas.toIntOrNull()
         val errores = buildMap {
@@ -195,15 +198,17 @@ class TarjetaDetalleViewModel @Inject constructor(
             if (f.cuotas.isNotBlank() && (cuotas == null || cuotas !in 2..60)) put("cuotas", "Entre 2 y 60 cuotas (vacío = de contado).")
         }
         if (errores.isNotEmpty()) { _form.value = f.copy(errores = errores); return }
-        _form.value = f.copy(guardando = true, errores = emptyMap(), error = null)
+        _form.value = f.copy(guardando = true, errores = emptyMap(), error = null, exceso = null)
         viewModelScope.launch {
             val body = MovimientoTarjetaBody(
                 f.tipo, f.descripcion.trim(), f.monto, f.fecha, if (f.tipo == "compra") cuotas else null,
-                if (f.tipo == "credito") null else f.categoriaId, f.comentario.trim().ifBlank { null }, f.userId, f.contactoId?.toString()
+                if (f.tipo == "credito") null else f.categoriaId, f.comentario.trim().ifBlank { null }, f.userId, f.contactoId?.toString(),
+                decision?.modo ?: "revisar", decision?.traspasos
             )
             when (val r = repo.guardarMovimientoTarjeta(tarjetaId, f.id, body)) {
                 is Resultado.Ok -> { _form.value = null; avisar(if (f.id == null) "Movimiento registrado." else "Movimiento actualizado."); cargar() }
-                is Resultado.Falla -> _form.value = f.copy(guardando = false, errores = r.campos, error = r.mensaje)
+                is Resultado.Falla -> _form.value = if (r.presupuesto != null) f.copy(guardando = false, exceso = r.presupuesto)
+                    else f.copy(guardando = false, errores = r.campos, error = r.mensaje, exceso = null)
             }
         }
     }
@@ -548,13 +553,14 @@ private fun FormularioTarjeta(f: FormMovTarjeta, comunes: Comunes, desde: String
                 if (f.id != null) OutlinedButton(onClick = { confirmar = true }, enabled = !f.guardando) { Text("Eliminar", color = MaterialTheme.colorScheme.error) }
                 Spacer(Modifier.weight(1f))
                 TextButton(onClick = vm::cerrarForm) { Text("Cancelar") }
-                Button(onClick = vm::guardar, enabled = !f.guardando) {
+                Button(onClick = { vm.guardar() }, enabled = !f.guardando) {
                     if (f.guardando) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) else Text("Guardar")
                 }
             }
             Spacer(Modifier.height(8.dp))
         }
     }
+    f.exceso?.let { exceso -> DialogoCubrirPresupuesto(exceso, onDecidir = { vm.guardar(it) }, onCancelar = { vm.cambiar(f.copy(exceso = null)) }) }
     if (confirmar) AlertDialog(
         onDismissRequest = { confirmar = false },
         title = { Text("¿Eliminar este movimiento?") },

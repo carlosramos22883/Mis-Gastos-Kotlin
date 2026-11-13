@@ -61,6 +61,8 @@ import com.carlosramos.misgastos.ui.common.Cargando
 import com.carlosramos.misgastos.ui.common.Desplegable
 import com.carlosramos.misgastos.ui.common.ErrorConReintento
 import com.carlosramos.misgastos.ui.common.FilaValor
+import com.carlosramos.misgastos.ui.common.DecisionPresupuesto
+import com.carlosramos.misgastos.ui.common.DialogoCubrirPresupuesto
 import com.carlosramos.misgastos.ui.common.Formato
 import com.carlosramos.misgastos.ui.common.Insignia
 import com.carlosramos.misgastos.ui.common.Seccion
@@ -90,7 +92,11 @@ data class DetalleEstado(
     val comunes: Comunes? = null,
     val pago: FormPago? = null,
     val ocupado: Boolean = false,
-    val mensaje: String? = null
+    val mensaje: String? = null,
+    /** Cubrir a mano un presupuesto que se pasó: el detalle (de qué categorías) mientras el aviso está abierto. */
+    val cubrir: com.carlosramos.misgastos.data.remote.dto.ExcesoPresupuesto? = null,
+    /** Repartir lo que le queda a otras categorías: el detalle mientras el aviso está abierto. */
+    val reparto: com.carlosramos.misgastos.data.remote.dto.ExcesoPresupuesto? = null
 )
 
 @HiltViewModel
@@ -160,6 +166,47 @@ class CompromisoDetalleViewModel @Inject constructor(
         }
     }
 
+    fun abrirCubrir() = viewModelScope.launch {
+        when (val r = repo.excesoPresupuesto(id)) {
+            is Resultado.Ok -> _estado.value = _estado.value.copy(cubrir = r.datos, mensaje = if (r.datos == null) "Este presupuesto no se ha pasado." else null)
+            is Resultado.Falla -> _estado.value = _estado.value.copy(mensaje = r.mensaje)
+        }
+    }
+
+    fun cerrarCubrir() { _estado.value = _estado.value.copy(cubrir = null) }
+
+    fun cubrir(decision: DecisionPresupuesto) = viewModelScope.launch {
+        _estado.value = _estado.value.copy(cubrir = null, ocupado = true)
+        when (val r = repo.cubrirPresupuesto(id, decision.traspasos.orEmpty())) {
+            is Resultado.Ok -> _estado.value = _estado.value.copy(ocupado = false, compromiso = r.datos, mensaje = "Listo: el presupuesto quedó cubierto.")
+            is Resultado.Falla -> _estado.value = _estado.value.copy(ocupado = false, mensaje = r.mensaje)
+        }
+    }
+
+    fun abrirReparto() = viewModelScope.launch {
+        when (val r = repo.detalleReparto(id)) {
+            is Resultado.Ok -> _estado.value = _estado.value.copy(reparto = r.datos, mensaje = if (r.datos == null) "A este presupuesto ya no le queda nada." else null)
+            is Resultado.Falla -> _estado.value = _estado.value.copy(mensaje = r.mensaje)
+        }
+    }
+
+    fun cerrarReparto() { _estado.value = _estado.value.copy(reparto = null) }
+
+    fun repartir(decision: DecisionPresupuesto) = viewModelScope.launch {
+        _estado.value = _estado.value.copy(reparto = null, ocupado = true)
+        when (val r = repo.repartirPresupuesto(id, decision.traspasos.orEmpty())) {
+            is Resultado.Ok -> _estado.value = _estado.value.copy(ocupado = false, compromiso = r.datos, mensaje = "Listo: el presupuesto pasó a las categorías que elegiste.")
+            is Resultado.Falla -> _estado.value = _estado.value.copy(ocupado = false, mensaje = r.mensaje)
+        }
+    }
+
+    fun deshacerTraspaso(traspasoId: Int) = viewModelScope.launch {
+        when (val r = repo.deshacerTraspaso(traspasoId)) {
+            is Resultado.Ok -> { _estado.value = _estado.value.copy(mensaje = "El presupuesto regresó a su categoría."); cargar() }
+            is Resultado.Falla -> _estado.value = _estado.value.copy(mensaje = r.mensaje)
+        }
+    }
+
     fun cancelar(serie: Boolean, alTerminar: () -> Unit) {
         _estado.value = _estado.value.copy(ocupado = true)
         viewModelScope.launch {
@@ -175,6 +222,8 @@ class CompromisoDetalleViewModel @Inject constructor(
 @Composable
 fun CompromisoDetalleScreen(onVolver: () -> Unit, onEditar: (Int) -> Unit, onEditarSerie: (Int) -> Unit = {}, onAbrirTarjeta: (Int) -> Unit = {}, viewModel: CompromisoDetalleViewModel = hiltViewModel()) {
     val estado by viewModel.estado.collectAsStateWithLifecycle()
+    estado.cubrir?.let { exceso -> DialogoCubrirPresupuesto(exceso, manual = true, onDecidir = { viewModel.cubrir(it) }, onCancelar = { viewModel.cerrarCubrir() }) }
+    estado.reparto?.let { r -> DialogoCubrirPresupuesto(r, manual = true, repartir = true, onDecidir = { viewModel.repartir(it) }, onCancelar = { viewModel.cerrarReparto() }) }
     val snackbar = remember { SnackbarHostState() }
     var cancelar by remember { mutableStateOf<Boolean?>(null) } // false = este pago · true = la serie
     LaunchedEffect(estado.mensaje) { estado.mensaje?.let { snackbar.showSnackbar(it); viewModel.mensajeVisto() } }
@@ -215,6 +264,21 @@ fun CompromisoDetalleScreen(onVolver: () -> Unit, onEditar: (Int) -> Unit, onEdi
                         FilaValor("Gastado", Formato.dinero(p.gastado))
                         if ((p.comprometido.toDoubleOrNull() ?: 0.0) > 0) FilaValor("Por pagar (compromisos de la categoría)", Formato.dinero(p.comprometido))
                         FilaValor("Queda", Formato.dinero(p.queda), negrita = true)
+                    }
+                    if ((p.queda.toDoubleOrNull() ?: 0.0) < 0 && c.estado == "pendiente") OutlinedButton(
+                        onClick = { viewModel.abrirCubrir() }, enabled = !estado.ocupado, modifier = Modifier.fillMaxWidth()
+                    ) { Text("Cubrir con otras categorías") }
+                    if ((p.queda.toDoubleOrNull() ?: 0.0) > 0 && c.estado == "pendiente") OutlinedButton(
+                        onClick = { viewModel.abrirReparto() }, enabled = !estado.ocupado, modifier = Modifier.fillMaxWidth()
+                    ) { Text("Pasar lo que le queda a otras categorías") }
+                    if (!p.traspasos.isNullOrEmpty()) Seccion("Presupuesto movido entre categorías") {
+                        Text("Base ${Formato.dinero(p.montoBase)} · recibió ${Formato.dinero(p.recibido)} · cedió ${Formato.dinero(p.cedido)}. El total del hogar no cambia.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        p.traspasos.forEach { t ->
+                            FilaValor((if (t.recibe) "Recibió de «${t.categoria}»" else "Le pasó a «${t.categoria}»") +
+                                (if (t.manual) " · a mano" else " · por «${t.gasto}»"), (if (t.recibe) "+ " else "− ") + Formato.dinero(t.monto))
+                            if (t.manual && c.estado == "pendiente") TextButton(onClick = { viewModel.deshacerTraspaso(t.id) }) { Text("Deshacer") }
+                        }
                     }
                     Seccion("Gastos que lo descuentan") {
                         if (p.movimientos.isNullOrEmpty()) Text("Aún no hay gastos de esta categoría en el ciclo.", color = MaterialTheme.colorScheme.onSurfaceVariant)

@@ -71,6 +71,7 @@ import com.carlosramos.misgastos.data.repository.FinanzasRepository
 import com.carlosramos.misgastos.data.repository.Resultado
 import com.carlosramos.misgastos.ui.common.Avatar
 import com.carlosramos.misgastos.ui.common.Cargando
+import com.carlosramos.misgastos.ui.common.DecisionPresupuesto
 import com.carlosramos.misgastos.ui.common.ErrorConReintento
 import com.carlosramos.misgastos.ui.common.FormMovimiento
 import com.carlosramos.misgastos.ui.common.Formato
@@ -161,7 +162,7 @@ class CuentaDetalleViewModel @Inject constructor(
     fun cambiar(f: FormMovimiento) { _form.value = f }
     fun cerrarForm() { _form.value = null }
 
-    fun guardar() {
+    fun guardar(decision: DecisionPresupuesto? = null) {
         val f = _form.value ?: return
         val errores = buildMap {
             if (f.descripcion.isBlank()) put("descripcion", "Escribe una descripción.")
@@ -169,12 +170,14 @@ class CuentaDetalleViewModel @Inject constructor(
             if (f.categoriaId == null) put("categoria_personal_id", "Elige una categoría.")
         }
         if (errores.isNotEmpty()) { _form.value = f.copy(errores = errores); return }
-        _form.value = f.copy(guardando = true, errores = emptyMap(), error = null)
+        _form.value = f.copy(guardando = true, errores = emptyMap(), error = null, exceso = null)
         viewModelScope.launch {
-            val body = MovimientoCuentaBody(f.tipo, f.descripcion.trim(), f.monto, f.fecha, f.categoriaId, f.userId, f.contactoId?.toString())
+            val body = MovimientoCuentaBody(f.tipo, f.descripcion.trim(), f.monto, f.fecha, f.categoriaId, f.userId, f.contactoId?.toString(),
+                decision?.modo ?: "revisar", decision?.traspasos)
             when (val r = repo.guardarMovimientoCuenta(cuentaId, f.id, body)) {
                 is Resultado.Ok -> { _form.value = null; avisar(if (f.id == null) "Movimiento registrado." else "Movimiento actualizado."); cargar() }
-                is Resultado.Falla -> _form.value = f.copy(guardando = false, errores = r.campos, error = r.mensaje)
+                is Resultado.Falla -> _form.value = if (r.presupuesto != null) f.copy(guardando = false, exceso = r.presupuesto)
+                    else f.copy(guardando = false, errores = r.campos, error = r.mensaje, exceso = null)
             }
         }
     }
@@ -238,7 +241,7 @@ fun CuentaDetalleScreen(onVolver: () -> Unit, onEditar: (Int) -> Unit, viewModel
     }
     form?.let { f ->
         estado.comunes?.let { com ->
-            FormularioMovimiento(f, com, estado.ciclo?.inicio, viewModel::cambiar, viewModel::guardar, viewModel::eliminar, viewModel::cerrarForm)
+            FormularioMovimiento(f, com, estado.ciclo?.inicio, viewModel::cambiar, { viewModel.guardar() }, viewModel::eliminar, viewModel::cerrarForm, { viewModel.guardar(it) })
         }
     }
     if (transferir) TransferenciaSheet(

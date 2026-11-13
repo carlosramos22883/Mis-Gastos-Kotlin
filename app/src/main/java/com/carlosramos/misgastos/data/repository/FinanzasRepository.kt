@@ -19,7 +19,9 @@ import javax.inject.Singleton
 /** Resultado de una llamada a la API: los datos o el mensaje de Laravel (con los errores por campo). */
 sealed interface Resultado<out T> {
     data class Ok<T>(val datos: T) : Resultado<T>
-    data class Falla(val mensaje: String, val campos: Map<String, String> = emptyMap()) : Resultado<Nothing>
+    /** presupuesto: el gasto pasa su presupuesto (se elige de qué categorías cubrirlo y se reenvía). */
+    data class Falla(val mensaje: String, val campos: Map<String, String> = emptyMap(),
+        val presupuesto: com.carlosramos.misgastos.data.remote.dto.ExcesoPresupuesto? = null) : Resultado<Nothing>
 }
 
 /** Lo que usan todos los formularios: quién soy, el hogar, las categorías y los contactos. */
@@ -88,6 +90,13 @@ class FinanzasRepository @Inject constructor(
 
     suspend fun compromisos(periodo: String, estado: String?, pagina: Int) = llamar { api.compromisos(periodo, estado, pagina) }
     suspend fun compromiso(id: Int) = llamar { api.compromiso(id) }.datos()
+    suspend fun excesoPresupuesto(id: Int) = llamar { api.excesoPresupuesto(id) }.datos()
+    suspend fun cubrirPresupuesto(id: Int, traspasos: List<com.carlosramos.misgastos.data.remote.dto.TraspasoBody>) =
+        llamar { api.cubrirPresupuesto(id, com.carlosramos.misgastos.data.remote.dto.CubrirBody(traspasos)) }.datos()
+    suspend fun deshacerTraspaso(id: Int) = llamarSinCuerpo { api.deshacerTraspaso(id) }
+    suspend fun detalleReparto(id: Int) = llamar { api.detalleReparto(id) }.datos()
+    suspend fun repartirPresupuesto(id: Int, traspasos: List<com.carlosramos.misgastos.data.remote.dto.TraspasoBody>) =
+        llamar { api.repartirPresupuesto(id, com.carlosramos.misgastos.data.remote.dto.CubrirBody(traspasos)) }.datos()
     suspend fun crearCompromiso(body: com.carlosramos.misgastos.data.remote.dto.CompromisoBody) = llamarSinCuerpo { api.crearCompromiso(body) }
     suspend fun editarSerie(id: Int, body: com.carlosramos.misgastos.data.remote.dto.CompromisoBody) = llamar { api.editarSerie(id, body) }.datos()
     suspend fun editarCompromiso(id: Int, body: com.carlosramos.misgastos.data.remote.dto.CompromisoBody) = llamar { api.editarCompromiso(id, body) }.datos()
@@ -268,7 +277,8 @@ class FinanzasRepository @Inject constructor(
             404 -> Resultado.Falla(error?.message?.takeIf { it.isNotBlank() && it != "Not Found" } ?: "No se encontró el registro.")
             422 -> Resultado.Falla(
                 error?.errors?.values?.firstOrNull()?.firstOrNull() ?: error?.message ?: "Revisa los datos.",
-                error?.errors?.mapValues { it.value.firstOrNull().orEmpty() }.orEmpty()
+                error?.errors?.mapValues { it.value.firstOrNull().orEmpty() }.orEmpty(),
+                error?.presupuesto
             )
             else -> Resultado.Falla(error?.message?.takeIf { it.isNotBlank() } ?: "Error del servidor (${respuesta.code()}).")
         }

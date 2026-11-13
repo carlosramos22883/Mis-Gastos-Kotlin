@@ -81,6 +81,8 @@ import com.carlosramos.misgastos.ui.common.CampoMonto
 import com.carlosramos.misgastos.ui.common.Cargando
 import com.carlosramos.misgastos.ui.common.Confirmar
 import com.carlosramos.misgastos.ui.common.Desplegable
+import com.carlosramos.misgastos.ui.common.DecisionPresupuesto
+import com.carlosramos.misgastos.ui.common.DialogoCubrirPresupuesto
 import com.carlosramos.misgastos.ui.common.Formato
 import com.carlosramos.misgastos.ui.common.Imagen
 import com.carlosramos.misgastos.ui.common.Seccion
@@ -180,6 +182,9 @@ data class EventoFormEstado(
     val errores: Map<String, String> = emptyMap(),
     val error: String? = null,
     val confirmar: String? = null,
+    /** El pago pasa el presupuesto de su categoría (aviso) y lo que se eligió (se mantiene si luego se confirma un sobregiro). */
+    val exceso: com.carlosramos.misgastos.data.remote.dto.ExcesoPresupuesto? = null,
+    val decision: DecisionPresupuesto? = null,
     val listo: Int? = null
 ) {
     /** Pagó un miembro del hogar: se registra el pago y los contactos quedan debiendo. */
@@ -262,9 +267,10 @@ class EventoFormViewModel @Inject constructor(private val repo: FinanzasReposito
             pagador = posicion.indexOf(e.pagador).coerceAtLeast(0),
             consumos = e.productos.map { c -> ConsumoEventoBody(c.descripcion.trim(), c.precio, c.compartido, posicion.map { c.cantidad(it) }) },
             origen = if (e.pagaElHogar) e.origen else null, categoriaId = if (e.pagaElHogar && e.origen != "ninguno") e.categoriaId else null,
-            confirmar = if (confirmado) true else null
+            confirmar = if (confirmado) true else null,
+            presupuesto = e.decision?.modo ?: "revisar", traspasos = e.decision?.traspasos
         )
-        cambiar { it.copy(guardando = true, errores = emptyMap(), error = null, confirmar = null) }
+        cambiar { it.copy(guardando = true, errores = emptyMap(), error = null, confirmar = null, exceso = null) }
         viewModelScope.launch {
             when (val r = repo.guardarEvento(id, body)) {
                 is Resultado.Ok -> {
@@ -278,6 +284,7 @@ class EventoFormViewModel @Inject constructor(private val repo: FinanzasReposito
                     else cambiar { it.copy(guardando = false, listo = r.datos.id) }
                 }
                 is Resultado.Falla -> {
+                    if (r.presupuesto != null) { cambiar { it.copy(guardando = false, exceso = r.presupuesto, decision = null) }; return@launch }
                     val pregunta = r.campos["confirmar"]
                     cambiar { it.copy(guardando = false, errores = r.campos - "confirmar", error = if (pregunta != null) null else (r.campos.values.firstOrNull() ?: r.mensaje), confirmar = pregunta) }
                 }
@@ -438,6 +445,10 @@ fun EventoFormScreen(onListo: (Int) -> Unit, onVolver: () -> Unit, viewModel: Ev
         }
     }
     e.confirmar?.let { texto -> Confirmar("¿Registrar de todas formas?", texto, "Sí, registrar", { viewModel.guardar(confirmado = true) }, { viewModel.cambiar { it.copy(confirmar = null) } }) }
+    e.exceso?.let { exceso ->
+        DialogoCubrirPresupuesto(exceso, onDecidir = { d -> viewModel.cambiar { it.copy(exceso = null, decision = d) }; viewModel.guardar() },
+            onCancelar = { viewModel.cambiar { it.copy(exceso = null, decision = null) } })
+    }
 }
 
 @Composable

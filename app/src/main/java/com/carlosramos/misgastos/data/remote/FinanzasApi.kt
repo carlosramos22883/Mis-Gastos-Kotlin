@@ -37,6 +37,8 @@ import com.carlosramos.misgastos.data.remote.dto.Envoltura
 import com.carlosramos.misgastos.data.remote.dto.Hogar
 import com.carlosramos.misgastos.data.remote.dto.MovimientoEfectivo
 import com.carlosramos.misgastos.data.remote.dto.MovimientoEfectivoBody
+import com.carlosramos.misgastos.data.remote.dto.ExcesoPresupuesto
+import com.carlosramos.misgastos.data.remote.dto.CubrirBody
 import com.carlosramos.misgastos.data.remote.dto.PagoCompromisoBody
 import com.carlosramos.misgastos.data.remote.dto.PaginaCompromisos
 import com.carlosramos.misgastos.data.remote.dto.PaginaEfectivo
@@ -121,6 +123,21 @@ interface FinanzasApi {
     suspend fun compromiso(@Path("id") id: Int): Response<Envoltura<Compromiso>>
 
     /** Mapa ordenado origen → etiqueta ("cuenta:42" → "Agrícola Carlos ($ 19.36)"). */
+    @GET("compromisos/{id}/cubrir")
+    suspend fun excesoPresupuesto(@Path("id") id: Int): Response<Envoltura<ExcesoPresupuesto?>>
+
+    @POST("compromisos/{id}/cubrir")
+    suspend fun cubrirPresupuesto(@Path("id") id: Int, @Body body: CubrirBody): Response<Envoltura<Compromiso>>
+
+    @GET("compromisos/{id}/repartir")
+    suspend fun detalleReparto(@Path("id") id: Int): Response<Envoltura<ExcesoPresupuesto?>>
+
+    @POST("compromisos/{id}/repartir")
+    suspend fun repartirPresupuesto(@Path("id") id: Int, @Body body: CubrirBody): Response<Envoltura<Compromiso>>
+
+    @DELETE("presupuesto-traspasos/{id}")
+    suspend fun deshacerTraspaso(@Path("id") id: Int): Response<Unit>
+
     @GET("compromisos/{id}/origenes-pago")
     suspend fun origenesPago(@Path("id") id: Int): Response<Envoltura<Map<String, String>>>
 

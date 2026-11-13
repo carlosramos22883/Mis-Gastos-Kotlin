@@ -9,6 +9,7 @@ import com.carlosramos.misgastos.data.remote.dto.ResumenEfectivo
 import com.carlosramos.misgastos.data.repository.Comunes
 import com.carlosramos.misgastos.data.repository.FinanzasRepository
 import com.carlosramos.misgastos.data.repository.Resultado
+import com.carlosramos.misgastos.ui.common.DecisionPresupuesto
 import com.carlosramos.misgastos.ui.common.FormMovimiento
 import com.carlosramos.misgastos.ui.common.Formato
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -107,7 +108,7 @@ class EfectivoViewModel @Inject constructor(private val repo: FinanzasRepository
 
     fun cerrarForm() { _form.value = null }
 
-    fun guardar() {
+    fun guardar(decision: DecisionPresupuesto? = null) {
         val f = _form.value ?: return
         val errores = buildMap {
             if (f.descripcion.isBlank()) put("descripcion", "Escribe una descripción.")
@@ -115,16 +116,18 @@ class EfectivoViewModel @Inject constructor(private val repo: FinanzasRepository
             if (f.categoriaId == null) put("categoria_personal_id", "Elige una categoría.")
         }
         if (errores.isNotEmpty()) { _form.value = f.copy(errores = errores); return }
-        _form.value = f.copy(guardando = true, errores = emptyMap(), error = null)
+        _form.value = f.copy(guardando = true, errores = emptyMap(), error = null, exceso = null)
         viewModelScope.launch {
-            val body = MovimientoEfectivoBody(f.tipo, f.descripcion.trim(), f.monto, f.fecha, f.categoriaId, f.userId, f.contactoId?.toString())
+            val body = MovimientoEfectivoBody(f.tipo, f.descripcion.trim(), f.monto, f.fecha, f.categoriaId, f.userId, f.contactoId?.toString(),
+                decision?.modo ?: "revisar", decision?.traspasos)
             when (val r = repo.guardarEfectivo(f.id, body)) {
                 is Resultado.Ok -> {
                     _form.value = null
                     _estado.value = _estado.value.copy(mensaje = if (f.id == null) "Movimiento registrado." else "Movimiento actualizado.")
                     cargar()
                 }
-                is Resultado.Falla -> _form.value = f.copy(guardando = false, errores = r.campos, error = r.mensaje)
+                is Resultado.Falla -> _form.value = if (r.presupuesto != null) f.copy(guardando = false, exceso = r.presupuesto)
+                    else f.copy(guardando = false, errores = r.campos, error = r.mensaje, exceso = null)
             }
         }
     }

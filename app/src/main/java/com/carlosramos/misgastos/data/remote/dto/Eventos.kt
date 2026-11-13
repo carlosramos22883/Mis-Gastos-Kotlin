@@ -82,7 +82,10 @@ data class EventoBody(
     val consumos: List<ConsumoEventoBody>,
     val origen: String?,
     @SerializedName("categoria_personal_id") val categoriaId: Int?,
-    val confirmar: Boolean? = null
+    val confirmar: Boolean? = null,
+    /** revisar | pasarme | cubrir (con traspasos) */
+    val presupuesto: String? = null,
+    val traspasos: List<TraspasoBody>? = null
 )
 
 data class CobroEventoBody(val monto: String, val fecha: String, val destino: String, @SerializedName("user_id") val userId: Int?)

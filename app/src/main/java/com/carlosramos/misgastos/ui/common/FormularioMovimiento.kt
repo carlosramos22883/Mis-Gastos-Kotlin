@@ -49,7 +49,9 @@ data class FormMovimiento(
     val contactoId: Int? = null,
     val guardando: Boolean = false,
     val errores: Map<String, String> = emptyMap(),
-    val error: String? = null
+    val error: String? = null,
+    /** El gasto pasa su presupuesto: se muestra el aviso para cubrirlo con otras categorías. */
+    val exceso: com.carlosramos.misgastos.data.remote.dto.ExcesoPresupuesto? = null
 )
 
 /** Formulario de ingreso/egreso de efectivo o de una cuenta. [desde]: primera fecha permitida (inicio del ciclo). */
@@ -62,7 +64,8 @@ fun FormularioMovimiento(
     onCambiar: (FormMovimiento) -> Unit,
     onGuardar: () -> Unit,
     onEliminar: () -> Unit,
-    onCerrar: () -> Unit
+    onCerrar: () -> Unit,
+    onPresupuesto: (DecisionPresupuesto) -> Unit = {}
 ) {
     var confirmarBorrar by remember { mutableStateOf(false) }
     ModalBottomSheet(onDismissRequest = onCerrar, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
@@ -117,6 +120,7 @@ fun FormularioMovimiento(
             Spacer(Modifier.height(8.dp))
         }
     }
+    f.exceso?.let { exceso -> DialogoCubrirPresupuesto(exceso, onDecidir = onPresupuesto, onCancelar = { onCambiar(f.copy(exceso = null)) }) }
     if (confirmarBorrar) AlertDialog(
         onDismissRequest = { confirmarBorrar = false },
         title = { Text("¿Eliminar este movimiento?") },
