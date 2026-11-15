@@ -21,6 +21,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
@@ -34,10 +36,14 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -47,6 +53,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.carlosramos.misgastos.data.remote.dto.Alerta
+import com.carlosramos.misgastos.data.remote.dto.AvancesCiclo
+import com.carlosramos.misgastos.data.remote.dto.PrestamosCiclo
 import com.carlosramos.misgastos.data.remote.dto.Dashboard
 import com.carlosramos.misgastos.data.remote.dto.TarjetaResumen
 import com.carlosramos.misgastos.data.repository.FinanzasRepository
@@ -99,6 +107,7 @@ fun InicioScreen(
     onAbrirCuenta: (Int) -> Unit,
     onAbrirTarjeta: (Int) -> Unit,
     onVerPrestamos: () -> Unit,
+    onAbrirPrestamo: (Int) -> Unit,
     onVerNosDeben: () -> Unit,
     viewModel: InicioViewModel = hiltViewModel()
 ) {
@@ -120,7 +129,10 @@ fun InicioScreen(
                     )
                 }
                 item { Liquidez(d, onVerEfectivo) }
-                if (d.tope != null || !d.presupuestos.isNullOrEmpty()) item { GastoDelCiclo(d, onAbrirCompromiso) }
+                if (d.tope != null || !d.presupuestos.isNullOrEmpty()) item { GastoDelCiclo(d, onAbrirCompromiso, onVerEfectivo, onAbrirCuenta, onAbrirTarjeta) }
+                d.prestamosCiclo?.takeIf { it.lista.isNotEmpty() }?.let { pc -> item { PrestamosDelCiclo(pc, onAbrirPrestamo) } }
+                // Solo si en el ciclo se sacó algo de una tarjeta (avance o pago de otra tarjeta)
+                d.avancesCiclo?.takeIf { it.total > 0 }?.let { av -> item { AvancesEntreTarjetas(av, onAbrirTarjeta) } }
                 if (d.alertas.isNotEmpty()) item {
                     Seccion("Avisos") { d.alertas.forEach { FilaAlerta(it) } }
                 }
@@ -142,7 +154,6 @@ fun InicioScreen(
                         }
                     }
                 }
-                item { Tarjetas(d, estado.miembros, onAbrirTarjeta) }
                 item {
                     Seccion("Cuentas · ${Formato.dinero(d.totalCuentas)}") {
                         d.cuentas.forEach { c ->
@@ -181,6 +192,7 @@ fun InicioScreen(
                         }
                     }
                 }
+                item { Tarjetas(d, estado.miembros, onAbrirTarjeta) }
             }
         }
     }
@@ -295,7 +307,7 @@ private fun GastosPorCategoria(d: Dashboard) {
 
 /** Termómetro del ciclo: el tope de gasto y cada presupuesto (súper, gasolina…). Ámbar al 80 %, rojo al pasarse. */
 @Composable
-private fun GastoDelCiclo(d: Dashboard, onAbrirCompromiso: (Int) -> Unit) {
+private fun GastoDelCiclo(d: Dashboard, onAbrirCompromiso: (Int) -> Unit, onVerEfectivo: () -> Unit, onAbrirCuenta: (Int) -> Unit, onAbrirTarjeta: (Int) -> Unit) {
     val colorBarra = @Composable { usado: Double, monto: Double ->
         when { usado > monto -> MaterialTheme.colorScheme.error; usado >= monto * 0.8 -> Semantica.aviso; else -> Semantica.ingreso }
     }
@@ -307,14 +319,24 @@ private fun GastoDelCiclo(d: Dashboard, onAbrirCompromiso: (Int) -> Unit) {
     Seccion("Gasto del ciclo") {
         d.tope?.let { t ->
             Row {
-                Text("Llevas ${Formato.dinero(t.gastado)} de ${Formato.dinero(t.tope)}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                Text("Llevas ${Formato.dinero(t.gastado)}" + (if (t.comprometido > 0) " + ${Formato.dinero(t.comprometido)} por pagar" else "") + " de ${Formato.dinero(t.tope)}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                 Text("${t.porcentaje} %", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
             }
             Spacer(Modifier.height(4.dp))
-            barra(t.gastado, t.tope, 10)
+            barra(t.gastado + t.comprometido, t.tope, 10)
             Text(
                 if (t.queda < 0) "Te pasaste por ${Formato.dinero(-t.queda)}" else "Te quedan ${Formato.dinero(t.queda)} · ${Formato.dinero(t.porDia)} por día (${t.diasRestantes + 1} días)",
                 style = MaterialTheme.typography.bodySmall, color = if (t.queda < 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text("Cuenta lo gastado y lo que falta pagar en el ciclo, menos las cuotas de préstamos.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (!t.fuera.isNullOrEmpty()) Text(
+                "Fuera de presupuesto: ${Formato.dinero(t.fueraTotal)} (" + t.fuera.joinToString { "${it.nombre} ${Formato.dinero(it.gastado + it.comprometido)}" } +
+                    "). Sale del tope sin descontarse de ningún presupuesto.",
+                style = MaterialTheme.typography.labelSmall, color = Semantica.aviso
+            )
+            if (kotlin.math.abs(t.sinAsignar) >= 0.01) Text(
+                if (t.sinAsignar > 0) "Sin asignar a un presupuesto: ${Formato.dinero(t.sinAsignar)}." else "Los presupuestos suman ${Formato.dinero(-t.sinAsignar)} más que el tope.",
+                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(Modifier.height(8.dp))
         }
@@ -333,6 +355,119 @@ private fun GastoDelCiclo(d: Dashboard, onAbrirCompromiso: (Int) -> Unit) {
                     "${Formato.dinero(p.gastado)} de ${Formato.dinero(p.monto)}" + if (p.comprometido > 0) " + ${Formato.dinero(p.comprometido)} por pagar" else "",
                     style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+        }
+        // Lo gastado en categorías sin presupuesto también sale del tope: en rojo, junto a los demás
+        d.tope?.fuera.orEmpty().forEach { f ->
+            var abierto by rememberSaveable(f.nombre) { mutableStateOf(false) }
+            Column(Modifier.fillMaxWidth().clickable { abierto = !abierto }.padding(vertical = 5.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("${f.nombre} (sin presupuesto)", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    Text("te pasaste ${Formato.dinero(f.gastado + f.comprometido)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                    Icon(if (abierto) Icons.Default.ExpandLess else Icons.Default.ExpandMore, contentDescription = if (abierto) "Ocultar gastos" else "Ver gastos",
+                        modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Spacer(Modifier.height(3.dp))
+                Box(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(6.dp)).background(MaterialTheme.colorScheme.error))
+                Text(
+                    Formato.dinero(f.gastado) + if (f.comprometido > 0) " + ${Formato.dinero(f.comprometido)} por pagar" else "",
+                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            // Los gastos y lo por pagar de la categoría: cada uno abre donde está
+            if (abierto) Column(Modifier.fillMaxWidth().padding(start = 8.dp, bottom = 6.dp)) {
+                f.movimientos.orEmpty().forEach { m ->
+                    val abrir: () -> Unit = when (m.clase) {
+                        "cuenta" -> { { m.lugarId?.let(onAbrirCuenta) } }
+                        "tarjeta" -> { { m.lugarId?.let(onAbrirTarjeta) } }
+                        else -> onVerEfectivo
+                    }
+                    FilaValor("${Formato.fechaCorta(m.fecha)} · ${m.descripcion} (${m.origen}) ›", Formato.dinero(m.monto), onClick = abrir)
+                }
+                f.pendientes.orEmpty().forEach { c ->
+                    FilaValor("${c.fecha?.let { Formato.fechaCorta(it) } ?: "Sin fecha"} · ${c.descripcion} (por pagar) ›", Formato.dinero(c.monto), onClick = { onAbrirCompromiso(c.id) })
+                }
+            }
+        }
+    }
+}
+
+/** La cuota de cada préstamo, si ya se pagó en el ciclo y cuánto se pagó de más. */
+@Composable
+private fun PrestamosDelCiclo(pc: PrestamosCiclo, onAbrirPrestamo: (Int) -> Unit) {
+    Seccion("Préstamos del ciclo") {
+        Text(
+            "${pc.pagadas} de ${pc.cuotas} " + (if (pc.cuotas == 1) "cuota pagada" else "cuotas pagadas") +
+                (if (pc.falta > 0) " · faltan ${Formato.dinero(pc.falta)}" else "") + (if (pc.extra > 0) " · pagaste ${Formato.dinero(pc.extra)} de más" else ""),
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(4.dp))
+        pc.lista.forEach { p ->
+            Row(Modifier.fillMaxWidth().clickable { onAbrirPrestamo(p.id) }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(p.nombre, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(if (p.cuota > 0) "Cuota ${Formato.dinero(p.cuota)}" else "Sin cuota", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (p.mora > 0) Text("Incluye ${Formato.dinero(p.mora)} de mora", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    when {
+                        p.pagada -> Insignia("Pagada" + (p.fecha?.let { " el ${Formato.fechaCorta(it)}" } ?: ""), Semantica.ingreso)
+                        p.pagado > 0 && p.cuota > 0 -> Insignia("Faltan ${Formato.dinero(p.falta)}", Semantica.aviso)
+                        p.cuota > 0 -> Insignia("Sin pagar", MaterialTheme.colorScheme.onSurfaceVariant)
+                        else -> Text("Pagaste ${Formato.dinero(p.pagado)}", style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (p.extra > 0) Text("${Formato.dinero(p.extra)} de más", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, color = Semantica.ingreso)
+                }
+            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        }
+    }
+}
+
+/** Lo que se sacó de cada tarjeta en el ciclo (avances y pagos a otras) frente a lo que se le pagó, y a dónde fue. */
+@Composable
+private fun AvancesEntreTarjetas(av: AvancesCiclo, onAbrirTarjeta: (Int) -> Unit) {
+    val maximo = av.lista.maxOf { maxOf(it.sacado, it.recibido) }.coerceAtLeast(1.0)
+    val colorSacado = MaterialTheme.colorScheme.tertiary
+    val colorPagado = MaterialTheme.colorScheme.primary
+    val linea = @Composable { valor: Double, color: Color ->
+        if (valor > 0) Box(Modifier.fillMaxWidth((valor / maximo).toFloat().coerceIn(0.01f, 1f)).height(5.dp).clip(RoundedCornerShape(3.dp)).background(color))
+        else Spacer(Modifier.height(5.dp))
+    }
+    Seccion("Avances y pagos entre tarjetas") {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(colorSacado)); Spacer(Modifier.width(4.dp))
+            Text("Sacado", style = MaterialTheme.typography.labelSmall); Spacer(Modifier.width(12.dp))
+            Box(Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(colorPagado)); Spacer(Modifier.width(4.dp))
+            Text("Pagado a la tarjeta", style = MaterialTheme.typography.labelSmall)
+        }
+        av.lista.forEach { t ->
+            Column(Modifier.fillMaxWidth().clickable { onAbrirTarjeta(t.id) }.padding(vertical = 5.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(10.dp).clip(RoundedCornerShape(5.dp)).background(Formato.color(t.color, MaterialTheme.colorScheme.outline)))
+                    Spacer(Modifier.width(6.dp))
+                    Text(t.nombre, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("sacado ${Formato.dinero(t.sacado)} · pagado ${Formato.dinero(t.recibido)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Spacer(Modifier.height(3.dp))
+                linea(t.sacado, colorSacado)
+                Spacer(Modifier.height(2.dp))
+                linea(t.recibido, colorPagado)
+            }
+        }
+        if (av.flujos.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            Text("A dónde fue lo sacado", style = MaterialTheme.typography.titleSmall)
+            av.flujos.forEach { f ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                    Text("${f.de} → ${f.a} (" + (if (f.tipo == "avance") "avance" else "pago de tarjeta") + ")", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                    Text(Formato.dinero(f.monto), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                }
+            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                Text("Total sacado de las tarjetas", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                Text(Formato.dinero(av.total), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
             }
         }
     }

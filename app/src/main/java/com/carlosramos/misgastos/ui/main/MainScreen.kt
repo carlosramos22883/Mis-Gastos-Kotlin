@@ -159,6 +159,7 @@ fun MainScreen(onCerrarSesion: () -> Unit, viewModel: MainViewModel = hiltViewMo
                     onAbrirCuenta = { nav.navigate("cuenta/$it") },
                     onAbrirTarjeta = { nav.navigate("tarjeta/$it") },
                     onVerPrestamos = { nav.navigate("prestamos") },
+                    onAbrirPrestamo = { nav.navigate("prestamo/$it") },
                     onVerNosDeben = { nav.navigate("contactos?deben=true") }
                 )
             }

@@ -53,17 +53,87 @@ data class Dashboard(
     val proximos: List<Proximo>,
     /** Tope de gasto del ciclo (null = sin tope) y presupuestos (súper, gasolina…) del ciclo */
     val tope: TopeGasto? = null,
-    val presupuestos: List<PresupuestoResumen>? = null
+    val presupuestos: List<PresupuestoResumen>? = null,
+    /** Cuotas de préstamos del mes frente a lo pagado en el ciclo */
+    @SerializedName("prestamos_ciclo") val prestamosCiclo: PrestamosCiclo? = null,
+    /** Avances y pagos entre tarjetas del ciclo */
+    @SerializedName("avances_ciclo") val avancesCiclo: AvancesCiclo? = null
 )
 
+/**
+ * Tope del ciclo: gastado + comprometido (por pagar) frente al tope. Siempre cuadra:
+ * queda = sinAsignar + lo que queda en los presupuestos − fueraTotal (gastado o por pagar en categorías sin presupuesto).
+ */
 data class TopeGasto(
     val tope: Double,
     val gastado: Double,
+    val comprometido: Double = 0.0,
     val queda: Double,
     @SerializedName("por_dia") val porDia: Double,
     val porcentaje: Int,
-    @SerializedName("dias_restantes") val diasRestantes: Int
+    @SerializedName("dias_restantes") val diasRestantes: Int,
+    val presupuestado: Double = 0.0,
+    @SerializedName("sin_asignar") val sinAsignar: Double = 0.0,
+    val fuera: List<FueraDePresupuesto>? = null,
+    @SerializedName("fuera_total") val fueraTotal: Double = 0.0
 )
+
+/** Una categoría con gastos (o por pagar) sin presupuesto en el ciclo, con esos gastos y compromisos */
+data class FueraDePresupuesto(
+    val nombre: String,
+    @SerializedName("categoria_id") val categoriaId: Int? = null,
+    val gastado: Double,
+    val comprometido: Double,
+    val movimientos: List<MovimientoFuera>? = null,
+    val pendientes: List<PendienteFuera>? = null
+)
+
+/** clase: efectivo | cuenta | tarjeta; lugarId = la cuenta o la tarjeta (null en efectivo) */
+data class MovimientoFuera(
+    val clase: String,
+    val id: Int,
+    @SerializedName("lugar_id") val lugarId: Int?,
+    val fecha: String,
+    val descripcion: String,
+    val origen: String,
+    val monto: Double
+)
+
+/** Un compromiso por pagar de la categoría */
+data class PendienteFuera(val id: Int, val descripcion: String, val fecha: String?, val monto: Double)
+
+/** cuotas = préstamos con cuota; pagadas = cuántas ya se cubrieron en el ciclo */
+data class PrestamosCiclo(val lista: List<PrestamoCiclo>, val cuotas: Int = 0, val pagadas: Int = 0, val cuota: Double, val pagado: Double, val extra: Double, val falta: Double)
+
+/** pagada = cubrió la cuota; extra = lo pagado de más (sin la mora); falta = lo que aún no se paga; fecha = último pago del ciclo */
+data class PrestamoCiclo(
+    val id: Int,
+    val nombre: String,
+    val cuota: Double,
+    val pagado: Double,
+    val mora: Double = 0.0,
+    val extra: Double,
+    val falta: Double,
+    val pagada: Boolean = false,
+    val fecha: String? = null
+)
+
+/** total = todo lo sacado de las tarjetas en el ciclo (0 = la sección no se muestra) */
+data class AvancesCiclo(val lista: List<TarjetaMovida>, val flujos: List<FlujoTarjeta>, val total: Double = 0.0)
+
+/** sacado = avances + pagos a otras tarjetas hechos con esta; recibido = lo que se le pagó */
+data class TarjetaMovida(
+    val id: Int,
+    val nombre: String,
+    val color: String?,
+    val avances: Double,
+    @SerializedName("pagos_a_otras") val pagosAOtras: Double,
+    val sacado: Double,
+    val recibido: Double
+)
+
+/** tipo: avance | pago */
+data class FlujoTarjeta(val de: String, val a: String, val monto: Double, val tipo: String)
 
 /** queda < 0 = se pasó; comprometido = compromisos de su categoría aún por pagar (ya apartados) */
 data class PresupuestoResumen(
@@ -245,7 +315,9 @@ data class TraspasoPresupuesto(
  */
 data class ExcesoPresupuesto(
     val mensaje: String,
-    @SerializedName("presupuesto_id") val presupuestoId: Int,
+    /** null cuando la categoría no tenía presupuesto (sinPresupuesto): se crea al cubrirlo */
+    @SerializedName("presupuesto_id") val presupuestoId: Int?,
+    @SerializedName("sin_presupuesto") val sinPresupuesto: Boolean = false,
     val categoria: String,
     val queda: String? = null,
     val gasto: String? = null,

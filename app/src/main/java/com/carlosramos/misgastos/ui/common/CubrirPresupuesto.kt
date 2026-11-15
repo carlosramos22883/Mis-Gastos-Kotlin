@@ -123,12 +123,15 @@ fun DialogoCubrirPresupuesto(
 
     AlertDialog(
         onDismissRequest = onCancelar,
-        title = { Text(if (repartir) "Pasar a otras categorías" else if (manual) "Este presupuesto se pasó" else "Este gasto pasa tu presupuesto") },
+        title = { Text(if (repartir) "Pasar a otras categorías" else if (manual) "Este presupuesto se pasó" else if (exceso.sinPresupuesto) "Esta categoría no tenía presupuesto" else "Este gasto pasa tu presupuesto") },
         text = {
             Column(Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
                     if (repartir) "A «${exceso.categoria}» le quedan ${Formato.dinero(exceso.disponible)}. Pásalo a las categorías que sí lo van a usar."
                     else if (manual) "«${exceso.categoria}» se pasó por ${Formato.dinero(exceso.excedente)}."
+                    else if (exceso.sinPresupuesto) "«${exceso.categoria}» no tiene presupuesto en este ciclo" +
+                        (if (RepartoPresupuesto.centavos(exceso.queda) < 0) " y ya lleva ${Formato.dinero(-RepartoPresupuesto.centavos(exceso.queda) / 100.0)} gastados" else "") +
+                        ". Si lo guardas, te pasas del tope por ${Formato.dinero(exceso.excedente)}. ¿Aun así deseas guardarlo?"
                     else "A «${exceso.categoria}» le quedan ${Formato.dinero(exceso.queda)} y el gasto es de ${Formato.dinero(exceso.gasto)}: te pasarías por ${Formato.dinero(exceso.excedente)}."
                 )
                 if (exceso.opciones.isEmpty()) {
@@ -176,7 +179,7 @@ fun DialogoCubrirPresupuesto(
         dismissButton = {
             Row {
                 TextButton(onClick = onCancelar) { Text("Cancelar") }
-                if (!manual && !repartir) TextButton(onClick = { onDecidir(DecisionPresupuesto("pasarme")) }) { Text("Guardar y pasarme") }
+                if (!manual && !repartir) TextButton(onClick = { onDecidir(DecisionPresupuesto("pasarme")) }) { Text(if (exceso.sinPresupuesto) "Guardarlo sin presupuesto" else "Guardar y pasarme") }
             }
         }
     )
