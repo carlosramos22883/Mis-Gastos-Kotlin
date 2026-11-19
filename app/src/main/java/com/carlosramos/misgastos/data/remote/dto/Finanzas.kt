@@ -324,7 +324,9 @@ data class ExcesoPresupuesto(
     val excedente: String? = null,
     val disponible: String,
     val alcanza: Boolean? = null,
-    val opciones: List<OpcionPresupuesto>
+    val opciones: List<OpcionPresupuesto>,
+    /** Al pagar una compra con varias categorías: de cuál es el aviso (se reenvía en presupuestos[clave]). */
+    val clave: String? = null
 )
 
 data class OpcionPresupuesto(
@@ -480,7 +482,9 @@ data class Catalogos(
     @SerializedName("tipos_prestamo") val tiposPrestamo: List<TipoSimple> = emptyList(),
     @SerializedName("tipos_ingreso") val tiposIngreso: List<TipoSimple> = emptyList(),
     val bancos: List<OpcionLogo> = emptyList(),
-    @SerializedName("marcas_red") val marcasRed: List<OpcionLogo> = emptyList()
+    @SerializedName("marcas_red") val marcasRed: List<OpcionLogo> = emptyList(),
+    @SerializedName("categorias_despensa") val categoriasDespensa: List<TipoSimple>? = null,
+    val despensa: ValoresDespensa? = null
 )
 
 // ---------- Préstamos (/api/prestamos) ----------

@@ -4,6 +4,8 @@ import com.carlosramos.misgastos.data.local.TokenProvider
 import kotlinx.coroutines.runBlocking
 import okhttp3.Interceptor
 import okhttp3.Response
+import com.carlosramos.misgastos.util.Constants
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import javax.inject.Inject
 
 /**
@@ -16,6 +18,9 @@ class AuthInterceptor @Inject constructor(
     private val tokenProvider: TokenProvider
 ) : Interceptor {
 
+    private val apiHost = Constants.BASE_URL.toHttpUrl().host
+    private val apiPuerto = Constants.BASE_URL.toHttpUrl().port
+
     override fun intercept(chain: Interceptor.Chain): Response {
         val originalRequest = chain.request()
 
@@ -23,8 +28,11 @@ class AuthInterceptor @Inject constructor(
         val publicPaths = listOf("/login", "/register", "/forgot-password", "/reset-password")
         val isPublicPath = publicPaths.any { originalRequest.url.encodedPath.contains(it) }
 
-        // Si es una ruta pública, no inyectamos token
-        if (isPublicPath) {
+        // El token solo va a nuestra API: nunca a otros sitios (ej. las fotos de productos de Walmart que carga Coil)
+        val esNuestraApi = originalRequest.url.host == apiHost && originalRequest.url.port == apiPuerto
+
+        // Si es una ruta pública o de otro sitio, no inyectamos token
+        if (isPublicPath || !esNuestraApi) {
             return chain.proceed(originalRequest)
         }
 

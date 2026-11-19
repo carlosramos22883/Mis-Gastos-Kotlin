@@ -3,6 +3,7 @@ package com.carlosramos.misgastos.di
 import com.carlosramos.misgastos.data.local.TokenProvider
 import com.carlosramos.misgastos.data.remote.ApiService
 import com.carlosramos.misgastos.data.remote.AuthInterceptor
+import com.carlosramos.misgastos.data.remote.DespensaApi
 import com.carlosramos.misgastos.data.remote.FinanzasApi
 import com.carlosramos.misgastos.util.Constants
 import dagger.Module
@@ -101,4 +102,8 @@ object NetworkModule {
     fun provideFinanzasApi(retrofit: Retrofit): FinanzasApi {
         return retrofit.create(FinanzasApi::class.java)
     }
+
+    @Provides
+    @Singleton
+    fun provideDespensaApi(retrofit: Retrofit): DespensaApi = retrofit.create(DespensaApi::class.java)
 }

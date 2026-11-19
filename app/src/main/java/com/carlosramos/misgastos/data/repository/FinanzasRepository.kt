@@ -49,6 +49,7 @@ class Sesion @Inject constructor() {
 @Singleton
 class FinanzasRepository @Inject constructor(
     private val api: FinanzasApi,
+    private val despensaApi: com.carlosramos.misgastos.data.remote.DespensaApi,
     private val authApi: ApiService,
     private val tokenProvider: TokenProvider,
     private val sesion: Sesion
@@ -244,6 +245,58 @@ class FinanzasRepository @Inject constructor(
     } catch (e: Exception) {
         Resultado.Falla("No se pudo descargar el reporte. Revisa tu conexión.")
     }
+
+    // ----- Despensa, tiendas y compras -----
+
+    suspend fun productos(filtros: Map<String, String> = emptyMap()) = llamar { despensaApi.productos(filtros) }
+    /** Al escanear: el producto del hogar con ese código, o Falla con código 404 (crearlo). */
+    suspend fun productoPorCodigo(codigo: String) = llamar { despensaApi.productoPorCodigo(codigo) }.datos()
+    suspend fun producto(id: Int) = llamar { despensaApi.producto(id) }.datos()
+    suspend fun guardarProducto(id: Int?, body: com.carlosramos.misgastos.data.remote.dto.ProductoBody) =
+        llamar { if (id == null) despensaApi.crearProducto(body) else despensaApi.editarProducto(id, body) }.datos()
+    suspend fun eliminarProducto(id: Int) = llamarSinCuerpo { despensaApi.eliminarProducto(id) }
+    /** Cambia la foto del producto (JPEG cuadrado de Imagen.paraSubir) conservando sus datos. */
+    suspend fun fotoProducto(id: Int, body: com.carlosramos.misgastos.data.remote.dto.ProductoBody, jpeg: ByteArray): Resultado<com.carlosramos.misgastos.data.remote.dto.Producto> {
+        val json = Gson().toJsonTree(body).asJsonObject
+        val campos = buildMap<String, okhttp3.RequestBody> {
+            put("_method", texto("PUT"))
+            json.entrySet().forEach { (clave, valor) ->
+                if (!valor.isJsonNull) put(clave, texto(if (valor.isJsonPrimitive && valor.asJsonPrimitive.isBoolean) (if (valor.asBoolean) "1" else "0") else valor.asString))
+            }
+        }
+        return llamar { despensaApi.fotoProducto(id, campos, okhttp3.MultipartBody.Part.createFormData("foto", "producto.jpg", jpeg.toRequestBody("image/jpeg".toMediaType()))) }.datos()
+    }
+    suspend fun ajustarDespensa(id: Int, accion: String, valor: String? = null) =
+        llamar { despensaApi.despensa(id, com.carlosramos.misgastos.data.remote.dto.DespensaBody(accion, valor)) }
+    suspend fun anotarPrecio(id: Int, body: com.carlosramos.misgastos.data.remote.dto.PrecioBody) = llamar { despensaApi.anotarPrecio(id, body) }.datos()
+    suspend fun eliminarPrecio(id: Int, precio: Int) = llamarSinCuerpo { despensaApi.eliminarPrecio(id, precio) }
+    suspend fun buscarEnLinea(id: Int, fuente: String, q: String?) = llamar { despensaApi.buscarEnLinea(id, fuente, q?.takeIf { it.isNotBlank() }) }
+    suspend fun enlazar(id: Int, fuente: String, r: com.carlosramos.misgastos.data.remote.dto.ResultadoEnLinea) = llamar { despensaApi.enlazar(id, fuente, r) }.datos()
+    suspend fun desenlazar(id: Int, fuente: String) = llamarSinCuerpo { despensaApi.desenlazar(id, fuente) }
+
+    suspend fun tiendas() = llamar { despensaApi.tiendas() }.datos()
+    suspend fun guardarTienda(id: Int?, body: com.carlosramos.misgastos.data.remote.dto.TiendaBody) =
+        llamar { if (id == null) despensaApi.crearTienda(body) else despensaApi.editarTienda(id, body) }.datos()
+    suspend fun eliminarTienda(id: Int) = llamarSinCuerpo { despensaApi.eliminarTienda(id) }
+    suspend fun tiendasComunes() = llamar { despensaApi.tiendasComunes() }
+
+    suspend fun compras() = llamar { despensaApi.compras() }
+    suspend fun nuevaLista() = llamar { despensaApi.nuevaLista() }.datos()
+    suspend fun lista(id: Int) = llamar { despensaApi.lista(id) }.datos()
+    suspend fun eliminarLista(id: Int) = llamarSinCuerpo { despensaApi.eliminarLista(id) }
+    suspend fun agregarFaltantes(id: Int) = llamar { despensaApi.agregarFaltantes(id) }.datos()
+    suspend fun terminarLista(id: Int) = llamar { despensaApi.terminar(id) }.datos()
+    suspend fun elegirTienda(id: Int, tienda: Int?) = llamar { despensaApi.elegirTienda(id, com.carlosramos.misgastos.data.remote.dto.TiendaActualBody(tienda)) }.datos()
+    suspend fun agregarALista(id: Int, body: com.carlosramos.misgastos.data.remote.dto.ItemBody) = llamar { despensaApi.agregarItem(id, body) }.datos()
+    suspend fun cambiarItem(id: Int, item: Int, cambio: com.carlosramos.misgastos.data.remote.dto.ItemCambio) = llamar { despensaApi.cambiarItem(id, item, cambio) }.datos()
+    suspend fun quitarItem(id: Int, item: Int) = llamar { despensaApi.quitarItem(id, item) }.datos()
+    suspend fun datosPago(id: Int) = llamar { despensaApi.datosPago(id) }
+    /** Si una categoría pasa su presupuesto: Falla con presupuesto (trae la clave) para decidir y reenviar. */
+    suspend fun pagarCompra(id: Int, body: com.carlosramos.misgastos.data.remote.dto.PagoBody) = llamar { despensaApi.pagar(id, body) }.datos().also { if (it is Resultado.Ok) olvidar() }
+    suspend fun deshacerPago(id: Int, pago: Int) = llamar { despensaApi.deshacerPago(id, pago) }.datos()
+    suspend fun iniciarConsulta(id: Int) = llamar { despensaApi.iniciarConsulta(id) }
+    suspend fun siguienteConsulta(id: Int, consulta: Int) = llamar { despensaApi.siguienteConsulta(id, consulta) }
+    suspend fun ruta(id: Int, costo: String?) = llamar { despensaApi.ruta(id, costo) }
 
     private fun texto(valor: String) = valor.toRequestBody("text/plain".toMediaType())
 

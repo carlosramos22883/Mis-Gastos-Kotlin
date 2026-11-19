@@ -97,6 +97,9 @@ dependencies {
     // Orientación de las fotos elegidas (EXIF)
     implementation("androidx.exifinterface:exifinterface:1.3.7")
 
+    // Escáner de códigos de barras de Google (su propia pantalla de cámara; la app no pide permiso de cámara)
+    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
+
     // Coil (logos de bancos y fotos de contactos, con el mismo cliente HTTP y su token)
     implementation("io.coil-kt:coil-compose:2.7.0")
 

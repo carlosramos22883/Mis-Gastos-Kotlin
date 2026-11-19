@@ -18,6 +18,8 @@ import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Celebration
+import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.Kitchen
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.RequestQuote
 import androidx.compose.material.icons.filled.Savings
@@ -212,6 +214,21 @@ fun MainScreen(onCerrarSesion: () -> Unit, viewModel: MainViewModel = hiltViewMo
                     onVolver = { nav.popBackStack() }
                 )
             }
+            composable("despensa") {
+                com.carlosramos.misgastos.ui.despensa.DespensaScreen(
+                    onAbrir = { nav.navigate("producto/$it") },
+                    onNuevo = { codigo -> nav.navigate("producto/0" + (codigo?.let { "?codigo=$it" } ?: "")) },
+                    onLista = { nav.navigate("compras") },
+                    onTiendas = { nav.navigate("tiendas") },
+                    onVolver = { nav.popBackStack() }
+                )
+            }
+            composable("producto/{id}?codigo={codigo}", arguments = listOf(navArgument("id") { type = NavType.IntType }, navArgument("codigo") { type = NavType.StringType; nullable = true; defaultValue = null })) {
+                com.carlosramos.misgastos.ui.despensa.ProductoScreen(onVolver = { nav.popBackStack() })
+            }
+            composable("tiendas") { com.carlosramos.misgastos.ui.despensa.TiendasScreen(onVolver = { nav.popBackStack() }) }
+            composable("compras") { com.carlosramos.misgastos.ui.compras.ComprasScreen(onAbrir = { nav.navigate("lista-compra/$it") }, onVolver = { nav.popBackStack() }) }
+            composable("lista-compra/{id}", arguments = conId) { com.carlosramos.misgastos.ui.compras.ListaCompraScreen(onVolver = { nav.popBackStack() }) }
             composable("perfil") { PerfilScreen(onListo = { nav.popBackStack() }, onVolver = { nav.popBackStack() }) }
             composable("categorias") { CategoriasScreen(onVolver = { nav.popBackStack() }) }
             composable("proyecciones") { com.carlosramos.misgastos.ui.proyecciones.ProyeccionesScreen(onVolver = { nav.popBackStack() }) }
@@ -250,6 +267,8 @@ private fun MasScreen(viewModel: MainViewModel, onCerrarSesion: () -> Unit, ir: 
                 Triple("prestamos", "Préstamos", Icons.Default.RequestQuote),
                 Triple("ingresos", "Ingresos", Icons.Default.Savings),
                 Triple("eventos", "Eventos (dividir la cuenta)", Icons.Default.Celebration),
+                Triple("despensa", "Despensa", Icons.Default.Kitchen),
+                Triple("compras", "Lista de compras", Icons.Default.ShoppingCart),
                 Triple("reportes", "Reportes", Icons.Default.Assessment),
                 Triple("proyecciones", "Proyecciones", Icons.AutoMirrored.Filled.TrendingDown),
                 Triple("categorias", "Categorías", Icons.Default.Category)
